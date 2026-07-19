@@ -47,7 +47,6 @@ apps/api/migrations/versions/__pycache__/
 
 # Persistent application data
 apps/api/storage/
-storage/
 
 # Frontend build and backups
 apps/web/dist/
