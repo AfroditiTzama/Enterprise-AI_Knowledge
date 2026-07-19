@@ -1,32 +1,31 @@
 # Enterprise AI Knowledge Assistant
 
 <p align="left">
-
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white&cacheSeconds=3600)
-![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=flat&logo=fastapi&logoColor=white&cacheSeconds=3600)
-![React](https://img.shields.io/badge/React-Frontend-61DAFB?style=flat&logo=react&logoColor=black&cacheSeconds=3600)
-![TypeScript](https://img.shields.io/badge/TypeScript-Frontend-3178C6?style=flat&logo=typescript&logoColor=white&cacheSeconds=3600)
-![Vite](https://img.shields.io/badge/Vite-Build-646CFF?style=flat&logo=vite&logoColor=white&cacheSeconds=3600)
-
-![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=flat&logo=docker&logoColor=white&cacheSeconds=3600)
-![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?style=flat&logo=sqlite&logoColor=white&cacheSeconds=3600)
-![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6F61?style=flat&cacheSeconds=3600)
-![Sentence Transformers](https://img.shields.io/badge/Sentence%20Transformers-Embeddings-FFD21E?style=flat&cacheSeconds=3600)
-![OpenRouter](https://img.shields.io/badge/OpenRouter-LLM%20API-6C5CE7?style=flat&cacheSeconds=3600)
-
-![JWT](https://img.shields.io/badge/JWT-Authentication-000000?style=flat&logo=jsonwebtokens&logoColor=white&cacheSeconds=3600)
-![Argon2](https://img.shields.io/badge/Argon2-Password%20Hashing-5C2D91?style=flat&cacheSeconds=3600)
-![Alembic](https://img.shields.io/badge/Alembic-Migrations-6BA81E?style=flat&cacheSeconds=3600)
-![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-Async-D71F00?style=flat&logo=sqlalchemy&logoColor=white&cacheSeconds=3600)
-
-![RAG](https://img.shields.io/badge/RAG-Hybrid%20Retrieval-8E44AD?style=flat&cacheSeconds=3600)
-![LLM Wiki](https://img.shields.io/badge/LLM%20Wiki-Generation-7B61FF?style=flat&cacheSeconds=3600)
-![Architecture](https://img.shields.io/badge/Architecture-Clean%20Architecture-34495E?style=flat&cacheSeconds=3600)
-![Citations](https://img.shields.io/badge/Answers-Grounded%20with%20Citations-27AE60?style=flat&cacheSeconds=3600)
-
-![Vercel](https://img.shields.io/badge/Vercel-Frontend%20Hosting-000000?style=flat&logo=vercel&logoColor=white&cacheSeconds=3600)
-![Railway](https://img.shields.io/badge/Railway-Backend%20Tested-0B0D0E?style=flat&logo=railway&logoColor=white&cacheSeconds=3600)
-
+  <img src="docs/badges/python.svg" alt="Python 3.12" height="28">
+  <img src="docs/badges/fastapi.svg" alt="FastAPI API" height="28">
+  <img src="docs/badges/react.svg" alt="React Frontend" height="28">
+  <img src="docs/badges/typescript.svg" alt="TypeScript Frontend" height="28">
+  <img src="docs/badges/vite.svg" alt="Vite Build" height="28">
+  <br>
+  <img src="docs/badges/docker.svg" alt="Docker Enabled" height="28">
+  <img src="docs/badges/sqlite.svg" alt="SQLite Database" height="28">
+  <img src="docs/badges/chromadb.svg" alt="ChromaDB Vector Store" height="28">
+  <img src="docs/badges/sentence-transformers.svg" alt="Sentence Transformers Embeddings" height="28">
+  <img src="docs/badges/openrouter.svg" alt="OpenRouter LLM API" height="28">
+  <br>
+  <img src="docs/badges/jwt.svg" alt="JWT Authentication" height="28">
+  <img src="docs/badges/argon2.svg" alt="Argon2 Password Hashing" height="28">
+  <img src="docs/badges/alembic.svg" alt="Alembic Migrations" height="28">
+  <img src="docs/badges/sqlalchemy.svg" alt="SQLAlchemy Async" height="28">
+  <br>
+  <img src="docs/badges/rag.svg" alt="RAG Hybrid Retrieval" height="28">
+  <img src="docs/badges/llm-wiki.svg" alt="LLM Wiki Generation" height="28">
+  <img src="docs/badges/architecture.svg" alt="Architecture Clean Architecture" height="28">
+  <img src="docs/badges/citations.svg" alt="Answers Grounded Citations" height="28">
+  <br>
+  <img src="docs/badges/vercel.svg" alt="Vercel Frontend" height="28">
+  <img src="docs/badges/railway.svg" alt="Railway Backend Tested" height="28">
+  <br>
 </p>
 
 A full-stack AI platform that transforms uploaded documents into a structured internal Wiki and provides grounded answers with traceable citations.

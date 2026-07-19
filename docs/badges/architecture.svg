@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="254"
+     height="28"
+     role="img"
+     aria-label="Architecture: Clean Architecture">
+  <title>Architecture: Clean Architecture</title>
+
+  <mask id="rounded">
+    <rect
+      width="254"
+      height="28"
+      rx="6"
+      fill="#ffffff"
+    />
+  </mask>
+
+  <g mask="url(#rounded)">
+    <rect
+      width="106"
+      height="28"
+      fill="#454A50"
+    />
+    <rect
+      x="106"
+      width="148"
+      height="28"
+      fill="#34495E"
+    />
+  </g>
+
+  <g
+    fill="#ffffff"
+    text-anchor="middle"
+    font-family="Verdana, Geneva, DejaVu Sans, sans-serif"
+    font-size="11"
+    font-weight="600"
+  >
+    <text
+      x="53.0"
+      y="18"
+    >Architecture</text>
+
+    <text
+      x="180.0"
+      y="18"
+    >Clean Architecture</text>
+  </g>
+</svg>

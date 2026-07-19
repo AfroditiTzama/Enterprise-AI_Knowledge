@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="114"
+     height="28"
+     role="img"
+     aria-label="Python: 3.12">
+  <title>Python: 3.12</title>
+
+  <mask id="rounded">
+    <rect
+      width="114"
+      height="28"
+      rx="6"
+      fill="#ffffff"
+    />
+  </mask>
+
+  <g mask="url(#rounded)">
+    <rect
+      width="64"
+      height="28"
+      fill="#454A50"
+    />
+    <rect
+      x="64"
+      width="50"
+      height="28"
+      fill="#3776AB"
+    />
+  </g>
+
+  <g
+    fill="#ffffff"
+    text-anchor="middle"
+    font-family="Verdana, Geneva, DejaVu Sans, sans-serif"
+    font-size="11"
+    font-weight="600"
+  >
+    <text
+      x="32.0"
+      y="18"
+    >Python</text>
+
+    <text
+      x="89.0"
+      y="18"
+    >3.12</text>
+  </g>
+</svg>

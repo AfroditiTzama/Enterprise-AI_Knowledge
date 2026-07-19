@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="184"
+     height="28"
+     role="img"
+     aria-label="ChromaDB: Vector Store">
+  <title>ChromaDB: Vector Store</title>
+
+  <mask id="rounded">
+    <rect
+      width="184"
+      height="28"
+      rx="6"
+      fill="#ffffff"
+    />
+  </mask>
+
+  <g mask="url(#rounded)">
+    <rect
+      width="78"
+      height="28"
+      fill="#454A50"
+    />
+    <rect
+      x="78"
+      width="106"
+      height="28"
+      fill="#E85D75"
+    />
+  </g>
+
+  <g
+    fill="#ffffff"
+    text-anchor="middle"
+    font-family="Verdana, Geneva, DejaVu Sans, sans-serif"
+    font-size="11"
+    font-weight="600"
+  >
+    <text
+      x="39.0"
+      y="18"
+    >ChromaDB</text>
+
+    <text
+      x="131.0"
+      y="18"
+    >Vector Store</text>
+  </g>
+</svg>
