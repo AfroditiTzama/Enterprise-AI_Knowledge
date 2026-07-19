@@ -1,0 +1,57 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# Node.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-data/
+
+# Logs
+*.log
+
+# Alembic
+apps/api/migrations/versions/__pycache__/
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Persistent application data
+apps/api/storage/
+storage/
+
+# Frontend build and backups
+apps/web/dist/
+apps/web/src_backup_*/
+
+# Local model and cache data
+.cache/
