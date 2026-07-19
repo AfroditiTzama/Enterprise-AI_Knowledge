@@ -1,0 +1,11 @@
+.venv
+.env
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+knowledge_assistant.db
+storage/
+tests/
+.DS_Store
