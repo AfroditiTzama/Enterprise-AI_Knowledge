@@ -2,30 +2,30 @@
 
 <p align="left">
 
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=flat&logo=fastapi&logoColor=white)
-![React](https://img.shields.io/badge/React-Frontend-61DAFB?style=flat&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-Frontend-3178C6?style=flat&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-Build-646CFF?style=flat&logo=vite&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white&cacheSeconds=3600)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?style=flat&logo=fastapi&logoColor=white&cacheSeconds=3600)
+![React](https://img.shields.io/badge/React-Frontend-61DAFB?style=flat&logo=react&logoColor=black&cacheSeconds=3600)
+![TypeScript](https://img.shields.io/badge/TypeScript-Frontend-3178C6?style=flat&logo=typescript&logoColor=white&cacheSeconds=3600)
+![Vite](https://img.shields.io/badge/Vite-Build-646CFF?style=flat&logo=vite&logoColor=white&cacheSeconds=3600)
 
-![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=flat&logo=docker&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?style=flat&logo=sqlite&logoColor=white)
-![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6F61?style=flat)
-![Sentence Transformers](https://img.shields.io/badge/Sentence%20Transformers-Embeddings-FFD21E?style=flat)
-![OpenRouter](https://img.shields.io/badge/OpenRouter-LLM%20API-6C5CE7?style=flat)
+![Docker](https://img.shields.io/badge/Docker-Enabled-2496ED?style=flat&logo=docker&logoColor=white&cacheSeconds=3600)
+![SQLite](https://img.shields.io/badge/SQLite-Database-003B57?style=flat&logo=sqlite&logoColor=white&cacheSeconds=3600)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-FF6F61?style=flat&cacheSeconds=3600)
+![Sentence Transformers](https://img.shields.io/badge/Sentence%20Transformers-Embeddings-FFD21E?style=flat&cacheSeconds=3600)
+![OpenRouter](https://img.shields.io/badge/OpenRouter-LLM%20API-6C5CE7?style=flat&cacheSeconds=3600)
 
-![JWT](https://img.shields.io/badge/JWT-Authentication-000000?style=flat&logo=jsonwebtokens&logoColor=white)
-![Argon2](https://img.shields.io/badge/Argon2-Password%20Hashing-5C2D91?style=flat)
-![Alembic](https://img.shields.io/badge/Alembic-Migrations-6BA81E?style=flat)
-![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-Async-D71F00?style=flat&logo=sqlalchemy&logoColor=white)
+![JWT](https://img.shields.io/badge/JWT-Authentication-000000?style=flat&logo=jsonwebtokens&logoColor=white&cacheSeconds=3600)
+![Argon2](https://img.shields.io/badge/Argon2-Password%20Hashing-5C2D91?style=flat&cacheSeconds=3600)
+![Alembic](https://img.shields.io/badge/Alembic-Migrations-6BA81E?style=flat&cacheSeconds=3600)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-Async-D71F00?style=flat&logo=sqlalchemy&logoColor=white&cacheSeconds=3600)
 
-![RAG](https://img.shields.io/badge/RAG-Hybrid%20Retrieval-8E44AD?style=flat)
-![LLM Wiki](https://img.shields.io/badge/LLM%20Wiki-Generation-7B61FF?style=flat)
-![Architecture](https://img.shields.io/badge/Architecture-Clean%20Architecture-34495E?style=flat)
-![Citations](https://img.shields.io/badge/Answers-Grounded%20with%20Citations-27AE60?style=flat)
+![RAG](https://img.shields.io/badge/RAG-Hybrid%20Retrieval-8E44AD?style=flat&cacheSeconds=3600)
+![LLM Wiki](https://img.shields.io/badge/LLM%20Wiki-Generation-7B61FF?style=flat&cacheSeconds=3600)
+![Architecture](https://img.shields.io/badge/Architecture-Clean%20Architecture-34495E?style=flat&cacheSeconds=3600)
+![Citations](https://img.shields.io/badge/Answers-Grounded%20with%20Citations-27AE60?style=flat&cacheSeconds=3600)
 
-![Vercel](https://img.shields.io/badge/Vercel-Frontend%20Hosting-000000?style=flat&logo=vercel&logoColor=white)
-![Railway](https://img.shields.io/badge/Railway-Backend%20Tested-0B0D0E?style=flat&logo=railway&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-Frontend%20Hosting-000000?style=flat&logo=vercel&logoColor=white&cacheSeconds=3600)
+![Railway](https://img.shields.io/badge/Railway-Backend%20Tested-0B0D0E?style=flat&logo=railway&logoColor=white&cacheSeconds=3600)
 
 </p>
 
