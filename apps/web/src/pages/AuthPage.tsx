@@ -2,6 +2,7 @@ import {
   BrainCircuit,
   LockKeyhole,
   Mail,
+  UserRound,
 } from "lucide-react";
 import {
   useState,
@@ -27,6 +28,8 @@ export default function AuthPage() {
 
   const [mode, setMode] =
     useState<AuthMode>("login");
+  const [fullName, setFullName] =
+    useState("");
   const [email, setEmail] =
     useState("");
   const [password, setPassword] =
@@ -47,6 +50,7 @@ export default function AuthPage() {
     try {
       if (mode === "register") {
         await register({
+          full_name: fullName,
           email,
           password,
         });
@@ -158,6 +162,27 @@ export default function AuthPage() {
             className="auth-form"
             onSubmit={handleSubmit}
           >
+            {mode === "register" && (
+              <label>
+                Full name
+                <div className="input-wrapper">
+                  <UserRound size={18} />
+
+                  <input
+                    type="text"
+                    value={fullName}
+                    onChange={(event) =>
+                      setFullName(event.target.value)
+                    }
+                    placeholder="Your full name"
+                    autoComplete="name"
+                    minLength={2}
+                    required
+                  />
+                </div>
+              </label>
+            )}
+
             <label>
               Email
               <div className="input-wrapper">
