@@ -1,4 +1,5 @@
 import json
+import unicodedata
 import re
 from typing import Any
 from uuid import UUID
@@ -91,6 +92,9 @@ class OpenRouterWikiCompiler(WikiCompiler):
             )
 
         source_text = self._format_chunks(chunks)
+        cleaned_document_title = self._sanitize_text(
+            document_title
+        )
 
         response_payload = {
             "model": self._model,
@@ -104,7 +108,7 @@ class OpenRouterWikiCompiler(WikiCompiler):
                     "role": "user",
                     "content": (
                         f"DOCUMENT TITLE:\n"
-                        f"{document_title}\n\n"
+                        f"{cleaned_document_title}\n\n"
                         f"DOCUMENT CHUNKS:\n"
                         f"{source_text}"
                     ),
@@ -127,13 +131,19 @@ class OpenRouterWikiCompiler(WikiCompiler):
             "Content-Type": "application/json",
         }
 
+        request_body = json.dumps(
+            response_payload,
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
         async with httpx.AsyncClient(
             timeout=self._timeout_seconds,
         ) as client:
             response = await client.post(
                 self._base_url,
                 headers=headers,
-                json=response_payload,
+                content=request_body,
             )
 
         try:
@@ -188,6 +198,12 @@ class OpenRouterWikiCompiler(WikiCompiler):
                 else "unknown"
             )
 
+            cleaned_text = (
+                OpenRouterWikiCompiler._sanitize_text(
+                    chunk.text
+                )
+            )
+
             formatted_chunks.append(
                 "\n".join(
                     [
@@ -204,7 +220,7 @@ class OpenRouterWikiCompiler(WikiCompiler):
                             f"</page_number>"
                         ),
                         "<text>",
-                        chunk.text,
+                        cleaned_text,
                         "</text>",
                         "</document_chunk>",
                     ]
@@ -214,6 +230,40 @@ class OpenRouterWikiCompiler(WikiCompiler):
         return "\n\n".join(
             formatted_chunks
         )
+
+    @staticmethod
+    def _sanitize_text(value: str) -> str:
+        cleaned_characters: list[str] = []
+
+        for character in value:
+            code_point = ord(character)
+
+            is_surrogate = (
+                0xD800 <= code_point <= 0xDFFF
+            )
+
+            is_noncharacter = (
+                0xFDD0 <= code_point <= 0xFDEF
+                or (
+                    code_point & 0xFFFF
+                ) in {0xFFFE, 0xFFFF}
+            )
+
+            is_invalid_control = (
+                unicodedata.category(character) == "Cc"
+                and character not in {"\n", "\r", "\t"}
+            )
+
+            if (
+                is_surrogate
+                or is_noncharacter
+                or is_invalid_control
+            ):
+                cleaned_characters.append(" ")
+            else:
+                cleaned_characters.append(character)
+
+        return "".join(cleaned_characters)
 
     @staticmethod
     def _system_prompt() -> str:
