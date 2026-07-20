@@ -2,6 +2,7 @@ import {
   ArrowLeftRight,
   BookOpen,
   FileText,
+  History,
   Link2,
   LoaderCircle,
   Search,
@@ -18,11 +19,25 @@ import {
 } from "../api/errors";
 import {
   getWikiPage,
+  listWikiPageRevisions,
   listWikiPages,
   type WikiPageDetails,
   type WikiPageItem,
   type WikiPageReferenceItem,
+  type WikiPageRevisionItem,
 } from "../api/wiki";
+
+function formatRevisionDate(
+  value: string,
+): string {
+  return new Intl.DateTimeFormat(
+    undefined,
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  ).format(new Date(value));
+}
 
 export default function WikiPage() {
   const [pages, setPages] =
@@ -31,6 +46,8 @@ export default function WikiPage() {
     useState("");
   const [pageDetails, setPageDetails] =
     useState<WikiPageDetails | null>(null);
+  const [revisions, setRevisions] =
+    useState<WikiPageRevisionItem[]>([]);
   const [query, setQuery] =
     useState("");
   const [isLoading, setIsLoading] =
@@ -71,6 +88,7 @@ export default function WikiPage() {
   useEffect(() => {
     if (!selectedSlug) {
       setPageDetails(null);
+      setRevisions([]);
       return;
     }
 
@@ -81,15 +99,24 @@ export default function WikiPage() {
       setDetailsError("");
 
       try {
-        const details =
-          await getWikiPage(selectedSlug);
+        const [
+          details,
+          revisionItems,
+        ] = await Promise.all([
+          getWikiPage(selectedSlug),
+          listWikiPageRevisions(
+            selectedSlug,
+          ),
+        ]);
 
         if (isCurrentRequest) {
           setPageDetails(details);
+          setRevisions(revisionItems);
         }
       } catch (requestError) {
         if (isCurrentRequest) {
           setPageDetails(null);
+          setRevisions([]);
           setDetailsError(
             getApiErrorMessage(requestError),
           );
@@ -146,8 +173,9 @@ export default function WikiPage() {
           <h1>Internal Wiki</h1>
 
           <p>
-            Browse the structured and connected
-            knowledge generated from your documents.
+            Browse structured, connected and
+            versioned knowledge generated from
+            your documents.
           </p>
         </div>
       </header>
@@ -233,11 +261,12 @@ export default function WikiPage() {
             ) : pageDetails ? (
               <>
                 <p className="wiki-document-label">
-                  Document{" "}
-                  {pageDetails.document_id.slice(
-                    0,
-                    8,
-                  )}
+                  {pageDetails.document_id
+                    ? `Document ${pageDetails.document_id.slice(
+                        0,
+                        8,
+                      )}`
+                    : "Global knowledge"}
                 </p>
 
                 <h2>{pageDetails.title}</h2>
@@ -365,6 +394,87 @@ export default function WikiPage() {
                       </div>
                     </section>
                   )}
+
+                  <section className="wiki-detail-section wiki-history-section">
+                    <h3>
+                      <History size={18} />
+                      Version history
+                    </h3>
+
+                    {revisions.length === 0 ? (
+                      <p className="wiki-history-empty">
+                        No revisions have been
+                        recorded yet. Build this
+                        document Wiki again to
+                        initialize its history.
+                      </p>
+                    ) : (
+                      <div className="wiki-revision-list">
+                        {revisions.map(
+                          (revision) => (
+                            <details
+                              key={revision.id}
+                              className="wiki-revision-card"
+                            >
+                              <summary>
+                                <span>
+                                  Revision{" "}
+                                  {
+                                    revision.revision_number
+                                  }
+                                </span>
+
+                                <span
+                                  className={
+                                    `wiki-revision-operation ` +
+                                    `revision-${revision.operation.toLowerCase()}`
+                                  }
+                                >
+                                  {
+                                    revision.operation
+                                  }
+                                </span>
+
+                                <time>
+                                  {formatRevisionDate(
+                                    revision.created_at,
+                                  )}
+                                </time>
+                              </summary>
+
+                              <div className="wiki-revision-content">
+                                <h4>
+                                  {revision.title}
+                                </h4>
+
+                                <p>
+                                  {revision.summary}
+                                </p>
+
+                                <div className="markdown-body">
+                                  <ReactMarkdown>
+                                    {
+                                      revision.content_markdown
+                                    }
+                                  </ReactMarkdown>
+                                </div>
+
+                                {revision.triggering_document_id && (
+                                  <small>
+                                    Triggered by document{" "}
+                                    {revision.triggering_document_id.slice(
+                                      0,
+                                      8,
+                                    )}
+                                  </small>
+                                )}
+                              </div>
+                            </details>
+                          ),
+                        )}
+                      </div>
+                    )}
+                  </section>
                 </div>
               </>
             ) : (

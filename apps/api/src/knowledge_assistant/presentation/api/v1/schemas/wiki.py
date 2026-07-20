@@ -36,6 +36,19 @@ class WikiPageDetailsResponse(WikiPageResponse):
     backlinks: list[WikiPageReferenceResponse]
 
 
+class WikiPageRevisionResponse(BaseModel):
+    id: UUID
+    wiki_page_id: UUID | None
+    page_slug: str
+    revision_number: int
+    title: str
+    summary: str
+    content_markdown: str
+    operation: str
+    triggering_document_id: UUID | None
+    created_at: datetime
+
+
 class CompileWikiResponse(BaseModel):
     document_id: UUID
     pages_count: int

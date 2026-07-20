@@ -2,7 +2,7 @@ import apiClient from "./client";
 
 export interface WikiPageItem {
   id: string;
-  document_id: string;
+  document_id: string | null;
   slug: string;
   title: string;
   summary: string;
@@ -31,6 +31,23 @@ export interface WikiPageDetails
   sources: WikiPageSourceItem[];
   related_pages: WikiPageReferenceItem[];
   backlinks: WikiPageReferenceItem[];
+}
+
+export interface WikiPageRevisionItem {
+  id: string;
+  wiki_page_id: string | null;
+  page_slug: string;
+  revision_number: number;
+  title: string;
+  summary: string;
+  content_markdown: string;
+  operation:
+    | "CREATE"
+    | "UPDATE"
+    | "MERGE"
+    | "RESTORE";
+  triggering_document_id: string | null;
+  created_at: string;
 }
 
 export interface CompileWikiResponse {
@@ -70,6 +87,20 @@ export async function getWikiPage(
     await apiClient.get<WikiPageDetails>(
       `/wiki/pages/${encodeURIComponent(slug)}`,
     );
+
+  return response.data;
+}
+
+export async function listWikiPageRevisions(
+  slug: string,
+): Promise<WikiPageRevisionItem[]> {
+  const response = await apiClient.get<
+    WikiPageRevisionItem[]
+  >(
+    `/wiki/pages/${encodeURIComponent(
+      slug,
+    )}/revisions`,
+  );
 
   return response.data;
 }

@@ -40,13 +40,13 @@ class WikiPageModel(Base):
         index=True,
     )
 
-    document_id: Mapped[UUID] = mapped_column(
+    document_id: Mapped[UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey(
             "documents.id",
-            ondelete="CASCADE",
+            ondelete="SET NULL",
         ),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 
@@ -164,4 +164,92 @@ class WikiPageLinkModel(Base):
         String(255),
         nullable=False,
         default="related",
+    )
+
+class WikiPageRevisionModel(Base):
+    __tablename__ = "wiki_page_revisions"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "page_slug",
+            "revision_number",
+            name=(
+                "uq_wiki_page_revisions_"
+                "owner_slug_revision"
+            ),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+    )
+
+    wiki_page_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "wiki_pages.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    owner_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "users.id",
+            ondelete="CASCADE",
+        ),
+        nullable=False,
+        index=True,
+    )
+
+    page_slug: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    revision_number: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+    )
+
+    title: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+    )
+
+    summary: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+    )
+
+    content_markdown: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    operation: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+    )
+
+    triggering_document_id: Mapped[
+        UUID | None
+    ] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(
+            "documents.id",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
+        index=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
     )

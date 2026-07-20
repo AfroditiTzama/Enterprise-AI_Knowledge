@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from uuid import UUID, uuid4
 
 
@@ -7,7 +8,7 @@ from uuid import UUID, uuid4
 class WikiPage:
     id: UUID
     owner_id: UUID
-    document_id: UUID
+    document_id: UUID | None
     slug: str
     title: str
     summary: str
@@ -20,7 +21,7 @@ class WikiPage:
         cls,
         *,
         owner_id: UUID,
-        document_id: UUID,
+        document_id: UUID | None,
         slug: str,
         title: str,
         summary: str,
@@ -132,3 +133,78 @@ class WikiPageDetails:
     sources: tuple[WikiPageSourceReference, ...]
     related_pages: tuple[WikiPageReference, ...]
     backlinks: tuple[WikiPageReference, ...]
+
+
+
+class WikiRevisionOperation(str, Enum):
+    CREATE = "CREATE"
+    UPDATE = "UPDATE"
+    MERGE = "MERGE"
+    RESTORE = "RESTORE"
+
+
+@dataclass(frozen=True)
+class WikiPageRevision:
+    id: UUID
+    wiki_page_id: UUID | None
+    owner_id: UUID
+    page_slug: str
+    revision_number: int
+    title: str
+    summary: str
+    content_markdown: str
+    operation: WikiRevisionOperation
+    triggering_document_id: UUID | None
+    created_at: datetime
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        wiki_page_id: UUID | None,
+        owner_id: UUID,
+        page_slug: str,
+        revision_number: int,
+        title: str,
+        summary: str,
+        content_markdown: str,
+        operation: WikiRevisionOperation,
+        triggering_document_id: UUID | None,
+    ) -> "WikiPageRevision":
+        cleaned_slug = page_slug.strip().lower()
+        cleaned_title = title.strip()
+        cleaned_content = content_markdown.strip()
+
+        if not cleaned_slug:
+            raise ValueError(
+                "Wiki revision page slug cannot be empty."
+            )
+
+        if revision_number < 1:
+            raise ValueError(
+                "Wiki revision number must be positive."
+            )
+
+        if not cleaned_title:
+            raise ValueError(
+                "Wiki revision title cannot be empty."
+            )
+
+        if not cleaned_content:
+            raise ValueError(
+                "Wiki revision content cannot be empty."
+            )
+
+        return cls(
+            id=uuid4(),
+            wiki_page_id=wiki_page_id,
+            owner_id=owner_id,
+            page_slug=cleaned_slug,
+            revision_number=revision_number,
+            title=cleaned_title,
+            summary=summary.strip(),
+            content_markdown=cleaned_content,
+            operation=operation,
+            triggering_document_id=triggering_document_id,
+            created_at=datetime.now(timezone.utc),
+        )
