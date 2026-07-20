@@ -17,6 +17,7 @@ from knowledge_assistant.infrastructure.database.models.document_chunk import (
 from knowledge_assistant.infrastructure.database.models.wiki import (
     WikiPageLinkModel,
     WikiPageModel,
+    WikiPageRevisionModel,
     WikiPageSourceModel,
 )
 

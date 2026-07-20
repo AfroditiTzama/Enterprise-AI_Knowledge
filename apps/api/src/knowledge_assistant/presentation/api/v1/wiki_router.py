@@ -13,12 +13,14 @@ from knowledge_assistant.domain.users.entities import User
 from knowledge_assistant.domain.wiki.entities import (
     WikiPage,
     WikiPageDetails,
+    WikiPageRevision,
 )
 from knowledge_assistant.presentation.api.v1.schemas.wiki import (
     CompileWikiResponse,
     WikiPageDetailsResponse,
     WikiPageReferenceResponse,
     WikiPageResponse,
+    WikiPageRevisionResponse,
     WikiPageSourceResponse,
 )
 
@@ -62,7 +64,9 @@ def _to_details_response(
             WikiPageSourceResponse(
                 chunk_id=source.chunk_id,
                 document_id=source.document_id,
-                document_filename=source.document_filename,
+                document_filename=(
+                    source.document_filename
+                ),
                 chunk_index=source.chunk_index,
                 page_number=source.page_number,
             )
@@ -86,6 +90,25 @@ def _to_details_response(
             )
             for reference in details.backlinks
         ],
+    )
+
+
+def _to_revision_response(
+    revision: WikiPageRevision,
+) -> WikiPageRevisionResponse:
+    return WikiPageRevisionResponse(
+        id=revision.id,
+        wiki_page_id=revision.wiki_page_id,
+        page_slug=revision.page_slug,
+        revision_number=revision.revision_number,
+        title=revision.title,
+        summary=revision.summary,
+        content_markdown=revision.content_markdown,
+        operation=revision.operation.value,
+        triggering_document_id=(
+            revision.triggering_document_id
+        ),
+        created_at=revision.created_at,
     )
 
 
@@ -142,6 +165,28 @@ async def list_wiki_pages(
     return [
         _to_response(page)
         for page in pages
+    ]
+
+
+@router.get(
+    "/pages/{slug}/revisions",
+    response_model=list[WikiPageRevisionResponse],
+)
+async def list_wiki_page_revisions(
+    slug: str,
+    wiki_repository: WikiRepositoryDependency,
+    current_user: User = Depends(get_current_user),
+) -> list[WikiPageRevisionResponse]:
+    revisions = (
+        await wiki_repository.list_revisions_by_slug(
+            owner_id=current_user.id,
+            slug=slug,
+        )
+    )
+
+    return [
+        _to_revision_response(revision)
+        for revision in revisions
     ]
 
 

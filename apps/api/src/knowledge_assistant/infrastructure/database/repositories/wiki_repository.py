@@ -1,6 +1,12 @@
 from uuid import UUID
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import (
+    delete,
+    func,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -9,7 +15,9 @@ from knowledge_assistant.domain.wiki.entities import (
     WikiPage,
     WikiPageDetails,
     WikiPageReference,
+    WikiPageRevision,
     WikiPageSourceReference,
+    WikiRevisionOperation,
 )
 from knowledge_assistant.domain.wiki.repository import WikiRepository
 from knowledge_assistant.infrastructure.database.mappers.wiki_mapper import (
@@ -24,6 +32,7 @@ from knowledge_assistant.infrastructure.database.models.document_chunk import (
 from knowledge_assistant.infrastructure.database.models.wiki import (
     WikiPageLinkModel,
     WikiPageModel,
+    WikiPageRevisionModel,
     WikiPageSourceModel,
 )
 
@@ -42,17 +51,106 @@ class SQLAlchemyWikiRepository(WikiRepository):
         self._validate_graph(graph)
 
         existing_page_result = await self._session.execute(
-            select(WikiPageModel.id).where(
+            select(WikiPageModel).where(
                 WikiPageModel.owner_id == graph.owner_id,
                 WikiPageModel.document_id == graph.document_id,
             )
         )
 
-        existing_page_ids = list(
+        existing_page_models = list(
             existing_page_result.scalars().all()
         )
 
+        existing_page_ids = [
+            model.id
+            for model in existing_page_models
+        ]
+
+        tracked_slugs = {
+            model.slug
+            for model in existing_page_models
+        }
+
+        tracked_slugs.update(
+            page.slug
+            for page in graph.pages
+        )
+
+        latest_revision_numbers: dict[str, int] = {}
+
+        if tracked_slugs:
+            revision_result = await self._session.execute(
+                select(
+                    WikiPageRevisionModel.page_slug,
+                    func.max(
+                        WikiPageRevisionModel.revision_number
+                    ).label("max_revision_number"),
+                )
+                .where(
+                    WikiPageRevisionModel.owner_id
+                    == graph.owner_id,
+                    WikiPageRevisionModel.page_slug.in_(
+                        tracked_slugs
+                    ),
+                )
+                .group_by(
+                    WikiPageRevisionModel.page_slug
+                )
+            )
+
+            latest_revision_numbers = {
+                row.page_slug: int(
+                    row.max_revision_number
+                )
+                for row in revision_result.all()
+            }
+
+        revisions: list[WikiPageRevision] = []
+
+        # Backfill a baseline revision for Wiki pages that
+        # existed before revision tracking was introduced.
+        for existing_page in existing_page_models:
+            if (
+                existing_page.slug
+                in latest_revision_numbers
+            ):
+                continue
+
+            baseline_revision = WikiPageRevision.create(
+                wiki_page_id=None,
+                owner_id=existing_page.owner_id,
+                page_slug=existing_page.slug,
+                revision_number=1,
+                title=existing_page.title,
+                summary=existing_page.summary,
+                content_markdown=(
+                    existing_page.content_markdown
+                ),
+                operation=WikiRevisionOperation.CREATE,
+                triggering_document_id=(
+                    existing_page.document_id
+                ),
+            )
+
+            revisions.append(baseline_revision)
+
+            latest_revision_numbers[
+                existing_page.slug
+            ] = 1
+
         if existing_page_ids:
+            # Preserve historical rows even when the current
+            # page records are replaced.
+            await self._session.execute(
+                update(WikiPageRevisionModel)
+                .where(
+                    WikiPageRevisionModel.wiki_page_id.in_(
+                        existing_page_ids
+                    )
+                )
+                .values(wiki_page_id=None)
+            )
+
             await self._session.execute(
                 delete(WikiPageLinkModel).where(
                     or_(
@@ -76,9 +174,45 @@ class SQLAlchemyWikiRepository(WikiRepository):
 
             await self._session.execute(
                 delete(WikiPageModel).where(
-                    WikiPageModel.id.in_(existing_page_ids)
+                    WikiPageModel.id.in_(
+                        existing_page_ids
+                    )
                 )
             )
+
+        for page in graph.pages:
+            latest_revision_number = (
+                latest_revision_numbers.get(
+                    page.slug
+                )
+            )
+
+            if latest_revision_number is None:
+                revision_number = 1
+                operation = WikiRevisionOperation.CREATE
+            else:
+                revision_number = (
+                    latest_revision_number + 1
+                )
+                operation = WikiRevisionOperation.UPDATE
+
+            revision = WikiPageRevision.create(
+                wiki_page_id=page.id,
+                owner_id=page.owner_id,
+                page_slug=page.slug,
+                revision_number=revision_number,
+                title=page.title,
+                summary=page.summary,
+                content_markdown=page.content_markdown,
+                operation=operation,
+                triggering_document_id=graph.document_id,
+            )
+
+            revisions.append(revision)
+
+            latest_revision_numbers[
+                page.slug
+            ] = revision_number
 
         page_models = [
             WikiMapper.page_to_model(page)
@@ -95,9 +229,15 @@ class SQLAlchemyWikiRepository(WikiRepository):
             for link in graph.links
         ]
 
+        revision_models = [
+            WikiMapper.revision_to_model(revision)
+            for revision in revisions
+        ]
+
         self._session.add_all(page_models)
         self._session.add_all(source_models)
         self._session.add_all(link_models)
+        self._session.add_all(revision_models)
 
         await self._session.flush()
 
@@ -151,7 +291,8 @@ class SQLAlchemyWikiRepository(WikiRepository):
         result = await self._session.execute(
             select(WikiPageModel).where(
                 WikiPageModel.owner_id == owner_id,
-                WikiPageModel.slug == slug.strip().lower(),
+                WikiPageModel.slug
+                == slug.strip().lower(),
             )
         )
 
@@ -197,6 +338,30 @@ class SQLAlchemyWikiRepository(WikiRepository):
             related_pages=related_pages,
             backlinks=backlinks,
         )
+
+    async def list_revisions_by_slug(
+        self,
+        *,
+        owner_id: UUID,
+        slug: str,
+    ) -> list[WikiPageRevision]:
+        result = await self._session.execute(
+            select(WikiPageRevisionModel)
+            .where(
+                WikiPageRevisionModel.owner_id
+                == owner_id,
+                WikiPageRevisionModel.page_slug
+                == slug.strip().lower(),
+            )
+            .order_by(
+                WikiPageRevisionModel.revision_number.desc()
+            )
+        )
+
+        return [
+            WikiMapper.revision_to_domain(model)
+            for model in result.scalars().all()
+        ]
 
     async def _list_page_sources(
         self,
@@ -259,7 +424,9 @@ class SQLAlchemyWikiRepository(WikiRepository):
                 WikiPageSourceReference(
                     chunk_id=row.chunk_id,
                     document_id=row.document_id,
-                    document_filename=row.document_filename,
+                    document_filename=(
+                        row.document_filename
+                    ),
                     chunk_index=row.chunk_index,
                     page_number=page_number,
                 )
@@ -280,7 +447,9 @@ class SQLAlchemyWikiRepository(WikiRepository):
                 target_page.id.label("page_id"),
                 target_page.slug.label("slug"),
                 target_page.title.label("title"),
-                WikiPageLinkModel.label.label("link_label"),
+                WikiPageLinkModel.label.label(
+                    "link_label"
+                ),
             )
             .join(
                 target_page,
@@ -303,7 +472,10 @@ class SQLAlchemyWikiRepository(WikiRepository):
                 page_id=row.page_id,
                 slug=row.slug,
                 title=row.title,
-                label=row.link_label.strip() or "related",
+                label=(
+                    row.link_label.strip()
+                    or "related"
+                ),
             )
             for row in result.all()
         )
@@ -321,7 +493,9 @@ class SQLAlchemyWikiRepository(WikiRepository):
                 source_page.id.label("page_id"),
                 source_page.slug.label("slug"),
                 source_page.title.label("title"),
-                WikiPageLinkModel.label.label("link_label"),
+                WikiPageLinkModel.label.label(
+                    "link_label"
+                ),
             )
             .join(
                 source_page,
@@ -344,7 +518,10 @@ class SQLAlchemyWikiRepository(WikiRepository):
                 page_id=row.page_id,
                 slug=row.slug,
                 title=row.title,
-                label=row.link_label.strip() or "related",
+                label=(
+                    row.link_label.strip()
+                    or "related"
+                ),
             )
             for row in result.all()
         )
@@ -353,7 +530,10 @@ class SQLAlchemyWikiRepository(WikiRepository):
     def _validate_graph(
         graph: WikiDocumentGraph,
     ) -> None:
-        page_ids = {page.id for page in graph.pages}
+        page_ids = {
+            page.id
+            for page in graph.pages
+        }
 
         for page in graph.pages:
             if page.owner_id != graph.owner_id:

@@ -5,6 +5,7 @@ from knowledge_assistant.domain.wiki.entities import (
     WikiDocumentGraph,
     WikiPage,
     WikiPageDetails,
+    WikiPageRevision,
 )
 
 
@@ -52,5 +53,15 @@ class WikiRepository(ABC):
         owner_id: UUID,
         slug: str,
     ) -> WikiPageDetails | None:
-        """Return a Wiki page with sources, links, and backlinks."""
+        """Return a Wiki page with sources and relationships."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_revisions_by_slug(
+        self,
+        *,
+        owner_id: UUID,
+        slug: str,
+    ) -> list[WikiPageRevision]:
+        """Return the revision history of one Wiki page."""
         raise NotImplementedError
