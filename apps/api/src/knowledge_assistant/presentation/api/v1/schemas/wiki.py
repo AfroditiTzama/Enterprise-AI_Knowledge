@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 class WikiPageResponse(BaseModel):
     id: UUID
-    document_id: UUID
+    document_id: UUID | None
     slug: str
     title: str
     summary: str
