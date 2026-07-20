@@ -11,6 +11,28 @@ export interface WikiPageItem {
   updated_at: string;
 }
 
+export interface WikiPageSourceItem {
+  chunk_id: string;
+  document_id: string;
+  document_filename: string;
+  chunk_index: number;
+  page_number: number | null;
+}
+
+export interface WikiPageReferenceItem {
+  page_id: string;
+  slug: string;
+  title: string;
+  label: string;
+}
+
+export interface WikiPageDetails
+  extends WikiPageItem {
+  sources: WikiPageSourceItem[];
+  related_pages: WikiPageReferenceItem[];
+  backlinks: WikiPageReferenceItem[];
+}
+
 export interface CompileWikiResponse {
   document_id: string;
   pages_count: number;
@@ -43,9 +65,9 @@ export async function listWikiPages(): Promise<
 
 export async function getWikiPage(
   slug: string,
-): Promise<WikiPageItem> {
+): Promise<WikiPageDetails> {
   const response =
-    await apiClient.get<WikiPageItem>(
+    await apiClient.get<WikiPageDetails>(
       `/wiki/pages/${encodeURIComponent(slug)}`,
     );
 

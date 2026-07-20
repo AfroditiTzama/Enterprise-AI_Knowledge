@@ -107,3 +107,28 @@ class WikiDocumentGraph:
     pages: tuple[WikiPage, ...]
     sources: tuple[WikiPageSource, ...]
     links: tuple[WikiPageLink, ...]
+
+
+@dataclass(frozen=True)
+class WikiPageSourceReference:
+    chunk_id: UUID
+    document_id: UUID
+    document_filename: str
+    chunk_index: int
+    page_number: int | None
+
+
+@dataclass(frozen=True)
+class WikiPageReference:
+    page_id: UUID
+    slug: str
+    title: str
+    label: str
+
+
+@dataclass(frozen=True)
+class WikiPageDetails:
+    page: WikiPage
+    sources: tuple[WikiPageSourceReference, ...]
+    related_pages: tuple[WikiPageReference, ...]
+    backlinks: tuple[WikiPageReference, ...]

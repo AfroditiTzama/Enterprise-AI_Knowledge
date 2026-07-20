@@ -4,6 +4,7 @@ from uuid import UUID
 from knowledge_assistant.domain.wiki.entities import (
     WikiDocumentGraph,
     WikiPage,
+    WikiPageDetails,
 )
 
 
@@ -13,7 +14,7 @@ class WikiRepository(ABC):
         self,
         graph: WikiDocumentGraph,
     ) -> None:
-        """Replace the complete wiki graph for a document."""
+        """Replace the complete Wiki graph for a document."""
         raise NotImplementedError
 
     @abstractmethod
@@ -21,7 +22,7 @@ class WikiRepository(ABC):
         self,
         owner_id: UUID,
     ) -> list[WikiPage]:
-        """Return all wiki pages owned by a user."""
+        """Return all Wiki pages owned by a user."""
         raise NotImplementedError
 
     @abstractmethod
@@ -31,7 +32,7 @@ class WikiRepository(ABC):
         owner_id: UUID,
         document_id: UUID,
     ) -> list[WikiPage]:
-        """Return the wiki pages generated from one document."""
+        """Return Wiki pages generated from one document."""
         raise NotImplementedError
 
     @abstractmethod
@@ -41,5 +42,15 @@ class WikiRepository(ABC):
         owner_id: UUID,
         slug: str,
     ) -> WikiPage | None:
-        """Return one wiki page by its owner-scoped slug."""
+        """Return one Wiki page by its owner-scoped slug."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def get_details_by_slug(
+        self,
+        *,
+        owner_id: UUID,
+        slug: str,
+    ) -> WikiPageDetails | None:
+        """Return a Wiki page with sources, links, and backlinks."""
         raise NotImplementedError

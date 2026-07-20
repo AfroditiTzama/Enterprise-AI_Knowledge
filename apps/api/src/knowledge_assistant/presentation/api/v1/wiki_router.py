@@ -10,10 +10,16 @@ from knowledge_assistant.bootstrap.dependencies.wiki import (
     WikiRepositoryDependency,
 )
 from knowledge_assistant.domain.users.entities import User
-from knowledge_assistant.domain.wiki.entities import WikiPage
+from knowledge_assistant.domain.wiki.entities import (
+    WikiPage,
+    WikiPageDetails,
+)
 from knowledge_assistant.presentation.api.v1.schemas.wiki import (
     CompileWikiResponse,
+    WikiPageDetailsResponse,
+    WikiPageReferenceResponse,
     WikiPageResponse,
+    WikiPageSourceResponse,
 )
 
 
@@ -35,6 +41,51 @@ def _to_response(
         content_markdown=page.content_markdown,
         created_at=page.created_at,
         updated_at=page.updated_at,
+    )
+
+
+def _to_details_response(
+    details: WikiPageDetails,
+) -> WikiPageDetailsResponse:
+    page = details.page
+
+    return WikiPageDetailsResponse(
+        id=page.id,
+        document_id=page.document_id,
+        slug=page.slug,
+        title=page.title,
+        summary=page.summary,
+        content_markdown=page.content_markdown,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        sources=[
+            WikiPageSourceResponse(
+                chunk_id=source.chunk_id,
+                document_id=source.document_id,
+                document_filename=source.document_filename,
+                chunk_index=source.chunk_index,
+                page_number=source.page_number,
+            )
+            for source in details.sources
+        ],
+        related_pages=[
+            WikiPageReferenceResponse(
+                page_id=reference.page_id,
+                slug=reference.slug,
+                title=reference.title,
+                label=reference.label,
+            )
+            for reference in details.related_pages
+        ],
+        backlinks=[
+            WikiPageReferenceResponse(
+                page_id=reference.page_id,
+                slug=reference.slug,
+                title=reference.title,
+                label=reference.label,
+            )
+            for reference in details.backlinks
+        ],
     )
 
 
@@ -96,22 +147,22 @@ async def list_wiki_pages(
 
 @router.get(
     "/pages/{slug}",
-    response_model=WikiPageResponse,
+    response_model=WikiPageDetailsResponse,
 )
 async def get_wiki_page(
     slug: str,
     wiki_repository: WikiRepositoryDependency,
     current_user: User = Depends(get_current_user),
-) -> WikiPageResponse:
-    page = await wiki_repository.get_by_slug(
+) -> WikiPageDetailsResponse:
+    details = await wiki_repository.get_details_by_slug(
         owner_id=current_user.id,
         slug=slug,
     )
 
-    if page is None:
+    if details is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Wiki page was not found.",
         )
 
-    return _to_response(page)
+    return _to_details_response(details)

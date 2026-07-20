@@ -861,3 +861,110 @@ a {
     padding: 18px;
   }
 }
+
+/* IMP-001A: Wiki relationships and sources */
+
+.wiki-details-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  max-width: 900px;
+  margin-top: 34px;
+}
+
+.wiki-detail-section {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #243249;
+  border-radius: 14px;
+  background: #101d30;
+}
+
+.wiki-detail-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  color: #f4f7fc;
+  font-size: 0.95rem;
+}
+
+.wiki-reference-list,
+.wiki-source-list {
+  display: grid;
+  gap: 9px;
+}
+
+.wiki-reference-button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #293955;
+  border-radius: 10px;
+  background: #0c1727;
+  color: #dbe4f1;
+  text-align: left;
+}
+
+.wiki-reference-button:hover {
+  border-color: #5873c8;
+  background: #142440;
+}
+
+.wiki-reference-button span {
+  color: #8191aa;
+  font-size: 0.76rem;
+  text-transform: capitalize;
+}
+
+.wiki-source-section {
+  grid-column: 1 / -1;
+}
+
+.wiki-source-list {
+  grid-template-columns:
+    repeat(auto-fit, minmax(230px, 1fr));
+}
+
+.wiki-source-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #293955;
+  border-radius: 10px;
+  background: #0c1727;
+  color: #9db1ff;
+}
+
+.wiki-source-card div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.wiki-source-card strong {
+  overflow: hidden;
+  color: #dbe4f1;
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wiki-source-card span {
+  color: #8191aa;
+  font-size: 0.76rem;
+}
+
+@media (max-width: 760px) {
+  .wiki-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wiki-source-section {
+    grid-column: auto;
+  }
+}

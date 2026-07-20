@@ -1,5 +1,8 @@
 import {
+  ArrowLeftRight,
   BookOpen,
+  FileText,
+  Link2,
   LoaderCircle,
   Search,
 } from "lucide-react";
@@ -14,8 +17,11 @@ import {
   getApiErrorMessage,
 } from "../api/errors";
 import {
+  getWikiPage,
   listWikiPages,
+  type WikiPageDetails,
   type WikiPageItem,
+  type WikiPageReferenceItem,
 } from "../api/wiki";
 
 export default function WikiPage() {
@@ -23,17 +29,28 @@ export default function WikiPage() {
     useState<WikiPageItem[]>([]);
   const [selectedSlug, setSelectedSlug] =
     useState("");
+  const [pageDetails, setPageDetails] =
+    useState<WikiPageDetails | null>(null);
   const [query, setQuery] =
     useState("");
   const [isLoading, setIsLoading] =
     useState(true);
+  const [
+    isLoadingDetails,
+    setIsLoadingDetails,
+  ] = useState(false);
   const [error, setError] =
+    useState("");
+  const [detailsError, setDetailsError] =
     useState("");
 
   useEffect(() => {
-    async function load() {
+    async function loadPages() {
       try {
+        setError("");
+
         const items = await listWikiPages();
+
         setPages(items);
 
         if (items.length > 0) {
@@ -48,8 +65,48 @@ export default function WikiPage() {
       }
     }
 
-    void load();
+    void loadPages();
   }, []);
+
+  useEffect(() => {
+    if (!selectedSlug) {
+      setPageDetails(null);
+      return;
+    }
+
+    let isCurrentRequest = true;
+
+    async function loadDetails() {
+      setIsLoadingDetails(true);
+      setDetailsError("");
+
+      try {
+        const details =
+          await getWikiPage(selectedSlug);
+
+        if (isCurrentRequest) {
+          setPageDetails(details);
+        }
+      } catch (requestError) {
+        if (isCurrentRequest) {
+          setPageDetails(null);
+          setDetailsError(
+            getApiErrorMessage(requestError),
+          );
+        }
+      } finally {
+        if (isCurrentRequest) {
+          setIsLoadingDetails(false);
+        }
+      }
+    }
+
+    void loadDetails();
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [selectedSlug]);
 
   const filteredPages = useMemo(() => {
     const normalizedQuery =
@@ -72,10 +129,11 @@ export default function WikiPage() {
     });
   }, [pages, query]);
 
-  const selectedPage =
-    pages.find(
-      (page) => page.slug === selectedSlug,
-    ) ?? null;
+  function openRelatedPage(
+    reference: WikiPageReferenceItem,
+  ) {
+    setSelectedSlug(reference.slug);
+  }
 
   return (
     <section className="page-container wiki-page-layout">
@@ -88,8 +146,8 @@ export default function WikiPage() {
           <h1>Internal Wiki</h1>
 
           <p>
-            Browse the structured knowledge
-            generated from your documents.
+            Browse the structured and connected
+            knowledge generated from your documents.
           </p>
         </div>
       </header>
@@ -130,9 +188,7 @@ export default function WikiPage() {
               <input
                 value={query}
                 onChange={(event) =>
-                  setQuery(
-                    event.target.value,
-                  )
+                  setQuery(event.target.value)
                 }
                 placeholder="Search Wiki pages"
               />
@@ -160,28 +216,155 @@ export default function WikiPage() {
           </aside>
 
           <article className="wiki-article">
-            {selectedPage ? (
+            {detailsError && (
+              <div className="error-message">
+                {detailsError}
+              </div>
+            )}
+
+            {isLoadingDetails ? (
+              <div className="loading-panel">
+                <LoaderCircle
+                  className="spin"
+                  size={26}
+                />
+                Loading Wiki page...
+              </div>
+            ) : pageDetails ? (
               <>
                 <p className="wiki-document-label">
                   Document{" "}
-                  {selectedPage.document_id.slice(
+                  {pageDetails.document_id.slice(
                     0,
                     8,
                   )}
                 </p>
 
-                <h2>{selectedPage.title}</h2>
+                <h2>{pageDetails.title}</h2>
 
                 <p className="wiki-summary">
-                  {selectedPage.summary}
+                  {pageDetails.summary}
                 </p>
 
                 <div className="markdown-body">
                   <ReactMarkdown>
                     {
-                      selectedPage.content_markdown
+                      pageDetails.content_markdown
                     }
                   </ReactMarkdown>
+                </div>
+
+                <div className="wiki-details-grid">
+                  {pageDetails.related_pages
+                    .length > 0 && (
+                    <section className="wiki-detail-section">
+                      <h3>
+                        <Link2 size={18} />
+                        Related pages
+                      </h3>
+
+                      <div className="wiki-reference-list">
+                        {pageDetails.related_pages.map(
+                          (reference) => (
+                            <button
+                              type="button"
+                              key={reference.page_id}
+                              className="wiki-reference-button"
+                              onClick={() =>
+                                openRelatedPage(
+                                  reference,
+                                )
+                              }
+                            >
+                              <strong>
+                                {reference.title}
+                              </strong>
+
+                              <span>
+                                {reference.label}
+                              </span>
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </section>
+                  )}
+
+                  {pageDetails.backlinks.length >
+                    0 && (
+                    <section className="wiki-detail-section">
+                      <h3>
+                        <ArrowLeftRight size={18} />
+                        Referenced by
+                      </h3>
+
+                      <div className="wiki-reference-list">
+                        {pageDetails.backlinks.map(
+                          (reference) => (
+                            <button
+                              type="button"
+                              key={reference.page_id}
+                              className="wiki-reference-button"
+                              onClick={() =>
+                                openRelatedPage(
+                                  reference,
+                                )
+                              }
+                            >
+                              <strong>
+                                {reference.title}
+                              </strong>
+
+                              <span>
+                                {reference.label}
+                              </span>
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </section>
+                  )}
+
+                  {pageDetails.sources.length >
+                    0 && (
+                    <section className="wiki-detail-section wiki-source-section">
+                      <h3>
+                        <FileText size={18} />
+                        Sources
+                      </h3>
+
+                      <div className="wiki-source-list">
+                        {pageDetails.sources.map(
+                          (source) => (
+                            <div
+                              key={source.chunk_id}
+                              className="wiki-source-card"
+                            >
+                              <FileText size={18} />
+
+                              <div>
+                                <strong>
+                                  {
+                                    source.document_filename
+                                  }
+                                </strong>
+
+                                <span>
+                                  {source.page_number !==
+                                  null
+                                    ? `Page ${source.page_number}`
+                                    : `Chunk ${
+                                        source.chunk_index +
+                                        1
+                                      }`}
+                                </span>
+                              </div>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    </section>
+                  )}
                 </div>
               </>
             ) : (
