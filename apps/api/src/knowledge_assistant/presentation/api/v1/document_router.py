@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from knowledge_assistant.bootstrap.dependencies.document import (
+    GetDocumentChunkPreviewQueryDependency,
     ListDocumentsQueryDependency,
     ProcessDocumentCommandDependency,
     UploadDocumentCommandDependency,
@@ -12,6 +13,7 @@ from knowledge_assistant.bootstrap.dependencies.document import (
 from knowledge_assistant.bootstrap.dependencies.user import get_current_user
 from knowledge_assistant.domain.users.entities import User
 from knowledge_assistant.presentation.api.v1.schemas.document import (
+    DocumentChunkPreviewResponse,
     DocumentResponse,
     ProcessDocumentResponse,
 )
@@ -81,6 +83,76 @@ async def list_documents(
         DocumentResponse.model_validate(document)
         for document in documents
     ]
+
+@router.get(
+    "/chunks/{chunk_id}",
+    response_model=DocumentChunkPreviewResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_document_chunk_preview(
+    chunk_id: UUID,
+    current_user: CurrentUserDependency,
+    query: GetDocumentChunkPreviewQueryDependency,
+) -> DocumentChunkPreviewResponse:
+    try:
+        preview = await query.execute(
+            chunk_id=chunk_id,
+            owner_id=current_user.id,
+        )
+
+        return DocumentChunkPreviewResponse(
+            chunk_id=preview.chunk_id,
+            document_id=preview.document_id,
+            document_filename=(
+                preview.document_filename
+            ),
+            chunk_index=preview.chunk_index,
+            page_number=preview.page_number,
+            text=preview.text,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/{document_id}/chunks/{chunk_index}",
+    response_model=DocumentChunkPreviewResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def get_document_chunk_preview_by_location(
+    document_id: UUID,
+    chunk_index: int,
+    current_user: CurrentUserDependency,
+    query: GetDocumentChunkPreviewQueryDependency,
+) -> DocumentChunkPreviewResponse:
+    try:
+        preview = await query.execute_by_location(
+            document_id=document_id,
+            chunk_index=chunk_index,
+            owner_id=current_user.id,
+        )
+
+        return DocumentChunkPreviewResponse(
+            chunk_id=preview.chunk_id,
+            document_id=preview.document_id,
+            document_filename=(
+                preview.document_filename
+            ),
+            chunk_index=preview.chunk_index,
+            page_number=preview.page_number,
+            text=preview.text,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
 
 @router.post(
     "/{document_id}/process",

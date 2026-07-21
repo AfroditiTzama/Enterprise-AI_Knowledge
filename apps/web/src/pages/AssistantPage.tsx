@@ -16,8 +16,17 @@ import {
   type KnowledgeSource,
 } from "../api/chat";
 import {
+  getDocumentChunkPreviewByLocation,
+} from "../api/documents";
+import {
   getApiErrorMessage,
 } from "../api/errors";
+import {
+  getWikiPage,
+} from "../api/wiki";
+import SourcePreviewDrawer, {
+  type SourcePreviewContent,
+} from "../components/SourcePreviewDrawer";
 
 interface ChatMessage {
   id: string;
@@ -42,6 +51,24 @@ export default function AssistantPage() {
     useState(false);
   const [error, setError] =
     useState("");
+  const [
+    isSourcePreviewOpen,
+    setIsSourcePreviewOpen,
+  ] = useState(false);
+  const [
+    isSourcePreviewLoading,
+    setIsSourcePreviewLoading,
+  ] = useState(false);
+  const [
+    sourcePreviewError,
+    setSourcePreviewError,
+  ] = useState("");
+  const [
+    sourcePreviewContent,
+    setSourcePreviewContent,
+  ] = useState<SourcePreviewContent | null>(
+    null,
+  );
 
   async function submitQuestion(
     value: string,
@@ -87,6 +114,77 @@ export default function AssistantPage() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  async function openSourcePreview(
+    source: KnowledgeSource,
+  ) {
+    setIsSourcePreviewOpen(true);
+    setIsSourcePreviewLoading(true);
+    setSourcePreviewError("");
+    setSourcePreviewContent(null);
+
+    try {
+      if (
+        source.source_type === "wiki_page" &&
+        source.slug
+      ) {
+        const page = await getWikiPage(
+          source.slug,
+        );
+
+        setSourcePreviewContent({
+          title: page.title,
+          sourceLabel: "Compiled Wiki page",
+          locationLabel: page.slug,
+          text: page.content_markdown,
+          score: source.score,
+          isMarkdown: true,
+        });
+
+        return;
+      }
+
+      if (
+        source.document_id &&
+        source.chunk_index !== null
+      ) {
+        const preview =
+          await getDocumentChunkPreviewByLocation(
+            source.document_id,
+            source.chunk_index,
+          );
+
+        setSourcePreviewContent({
+          title: preview.document_filename,
+          sourceLabel: "Original document",
+          locationLabel:
+            preview.page_number !== null
+              ? `Page ${preview.page_number}`
+              : `Chunk ${
+                  preview.chunk_index + 1
+                }`,
+          text: preview.text,
+          score: source.score,
+        });
+
+        return;
+      }
+
+      setSourcePreviewError(
+        "Preview is unavailable for this source.",
+      );
+    } catch (requestError) {
+      setSourcePreviewError(
+        getApiErrorMessage(requestError),
+      );
+    } finally {
+      setIsSourcePreviewLoading(false);
+    }
+  }
+
+  function closeSourcePreview() {
+    setIsSourcePreviewOpen(false);
   }
 
   function handleSubmit(
@@ -181,9 +279,15 @@ export default function AssistantPage() {
 
                         {message.sources.map(
                           (source) => (
-                            <div
+                            <button
+                              type="button"
                               className="source-card"
                               key={`${message.id}-${source.source_id}`}
+                              onClick={() =>
+                                void openSourcePreview(
+                                  source,
+                                )
+                              }
                             >
                               <strong>
                                 {source.source_id}:{" "}
@@ -192,7 +296,8 @@ export default function AssistantPage() {
 
                               <span>
                                 {source.source_type}
-                                {source.page_number
+                                {source.page_number !==
+                                null
                                   ? ` · page ${source.page_number}`
                                   : ""}
                                 {" · "}
@@ -201,7 +306,7 @@ export default function AssistantPage() {
                                   3,
                                 )}
                               </span>
-                            </div>
+                            </button>
                           ),
                         )}
                       </div>
@@ -270,6 +375,13 @@ export default function AssistantPage() {
           </button>
         </form>
       </div>
+      <SourcePreviewDrawer
+        isOpen={isSourcePreviewOpen}
+        isLoading={isSourcePreviewLoading}
+        error={sourcePreviewError}
+        content={sourcePreviewContent}
+        onClose={closeSourcePreview}
+      />
     </section>
   );
 }

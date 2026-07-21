@@ -10,10 +10,18 @@ from knowledge_assistant.bootstrap.dependencies.wiki import (
     WikiRepositoryDependency,
 )
 from knowledge_assistant.domain.users.entities import User
-from knowledge_assistant.domain.wiki.entities import WikiPage
+from knowledge_assistant.domain.wiki.entities import (
+    WikiPage,
+    WikiPageDetails,
+    WikiPageRevision,
+)
 from knowledge_assistant.presentation.api.v1.schemas.wiki import (
     CompileWikiResponse,
+    WikiPageDetailsResponse,
+    WikiPageReferenceResponse,
     WikiPageResponse,
+    WikiPageRevisionResponse,
+    WikiPageSourceResponse,
 )
 
 
@@ -35,6 +43,72 @@ def _to_response(
         content_markdown=page.content_markdown,
         created_at=page.created_at,
         updated_at=page.updated_at,
+    )
+
+
+def _to_details_response(
+    details: WikiPageDetails,
+) -> WikiPageDetailsResponse:
+    page = details.page
+
+    return WikiPageDetailsResponse(
+        id=page.id,
+        document_id=page.document_id,
+        slug=page.slug,
+        title=page.title,
+        summary=page.summary,
+        content_markdown=page.content_markdown,
+        created_at=page.created_at,
+        updated_at=page.updated_at,
+        sources=[
+            WikiPageSourceResponse(
+                chunk_id=source.chunk_id,
+                document_id=source.document_id,
+                document_filename=(
+                    source.document_filename
+                ),
+                chunk_index=source.chunk_index,
+                page_number=source.page_number,
+            )
+            for source in details.sources
+        ],
+        related_pages=[
+            WikiPageReferenceResponse(
+                page_id=reference.page_id,
+                slug=reference.slug,
+                title=reference.title,
+                label=reference.label,
+            )
+            for reference in details.related_pages
+        ],
+        backlinks=[
+            WikiPageReferenceResponse(
+                page_id=reference.page_id,
+                slug=reference.slug,
+                title=reference.title,
+                label=reference.label,
+            )
+            for reference in details.backlinks
+        ],
+    )
+
+
+def _to_revision_response(
+    revision: WikiPageRevision,
+) -> WikiPageRevisionResponse:
+    return WikiPageRevisionResponse(
+        id=revision.id,
+        wiki_page_id=revision.wiki_page_id,
+        page_slug=revision.page_slug,
+        revision_number=revision.revision_number,
+        title=revision.title,
+        summary=revision.summary,
+        content_markdown=revision.content_markdown,
+        operation=revision.operation.value,
+        triggering_document_id=(
+            revision.triggering_document_id
+        ),
+        created_at=revision.created_at,
     )
 
 
@@ -95,23 +169,45 @@ async def list_wiki_pages(
 
 
 @router.get(
+    "/pages/{slug}/revisions",
+    response_model=list[WikiPageRevisionResponse],
+)
+async def list_wiki_page_revisions(
+    slug: str,
+    wiki_repository: WikiRepositoryDependency,
+    current_user: User = Depends(get_current_user),
+) -> list[WikiPageRevisionResponse]:
+    revisions = (
+        await wiki_repository.list_revisions_by_slug(
+            owner_id=current_user.id,
+            slug=slug,
+        )
+    )
+
+    return [
+        _to_revision_response(revision)
+        for revision in revisions
+    ]
+
+
+@router.get(
     "/pages/{slug}",
-    response_model=WikiPageResponse,
+    response_model=WikiPageDetailsResponse,
 )
 async def get_wiki_page(
     slug: str,
     wiki_repository: WikiRepositoryDependency,
     current_user: User = Depends(get_current_user),
-) -> WikiPageResponse:
-    page = await wiki_repository.get_by_slug(
+) -> WikiPageDetailsResponse:
+    details = await wiki_repository.get_details_by_slug(
         owner_id=current_user.id,
         slug=slug,
     )
 
-    if page is None:
+    if details is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Wiki page was not found.",
         )
 
-    return _to_response(page)
+    return _to_details_response(details)

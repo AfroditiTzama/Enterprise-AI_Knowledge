@@ -18,6 +18,14 @@ class DocumentChunkRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def get_by_id(
+        self,
+        chunk_id: UUID,
+    ) -> DocumentChunkEntity | None:
+        """Return a document chunk by its ID."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_by_document_id(
         self,
         document_id: UUID,

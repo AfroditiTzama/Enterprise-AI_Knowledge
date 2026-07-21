@@ -3,7 +3,7 @@ import apiClient from "./client";
 export interface KnowledgeSource {
   source_id: string;
   source_type: string;
-  document_id: string;
+  document_id: string | null;
   title: string;
   score: number;
   slug: string | null;
