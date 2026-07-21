@@ -1,3 +1,4 @@
+import logging
 import re
 from uuid import UUID
 
@@ -17,7 +18,13 @@ from knowledge_assistant.domain.wiki.entities import (
     WikiPageLink,
     WikiPageSource,
 )
+from knowledge_assistant.domain.wiki.matcher import (
+    WikiSemanticMatcher,
+)
 from knowledge_assistant.domain.wiki.repository import WikiRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class CompileDocumentWikiCommand:
@@ -28,6 +35,7 @@ class CompileDocumentWikiCommand:
         document_chunk_repository: DocumentChunkRepository,
         wiki_repository: WikiRepository,
         wiki_compiler: WikiCompiler,
+        wiki_semantic_matcher: WikiSemanticMatcher,
     ) -> None:
         self._document_repository = document_repository
         self._document_chunk_repository = (
@@ -35,6 +43,9 @@ class CompileDocumentWikiCommand:
         )
         self._wiki_repository = wiki_repository
         self._wiki_compiler = wiki_compiler
+        self._wiki_semantic_matcher = (
+            wiki_semantic_matcher
+        )
 
     async def execute(
         self,
@@ -77,6 +88,30 @@ class CompileDocumentWikiCommand:
                 owner_id
             )
         )
+
+        semantic_matches = (
+            await self._wiki_semantic_matcher.match(
+                drafts=compilation.pages,
+                existing_pages=tuple(existing_pages),
+            )
+        )
+
+        for semantic_match in semantic_matches:
+            logger.info(
+                (
+                    "Wiki semantic decision: "
+                    "draft=%s decision=%s "
+                    "candidate=%s score=%s"
+                ),
+                semantic_match.draft_slug,
+                semantic_match.decision.value,
+                semantic_match.matched_page_slug,
+                (
+                    f"{semantic_match.score:.4f}"
+                    if semantic_match.score is not None
+                    else "n/a"
+                ),
+            )
 
         existing_pages_by_slug = {
             page.slug: page

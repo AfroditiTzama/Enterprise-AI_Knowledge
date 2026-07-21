@@ -11,6 +11,7 @@ from knowledge_assistant.application.wiki.commands.compile_document_wiki import 
 from knowledge_assistant.bootstrap.dependencies.document import (
     get_document_chunk_repository,
     get_document_repository,
+    get_embedding_service,
 )
 from knowledge_assistant.domain.documents.chunk_repository import (
     DocumentChunkRepository,
@@ -18,13 +19,22 @@ from knowledge_assistant.domain.documents.chunk_repository import (
 from knowledge_assistant.domain.documents.repository import (
     DocumentRepository,
 )
+from knowledge_assistant.domain.embeddings.service import (
+    EmbeddingService,
+)
 from knowledge_assistant.domain.wiki.compiler import WikiCompiler
+from knowledge_assistant.domain.wiki.matcher import (
+    WikiSemanticMatcher,
+)
 from knowledge_assistant.domain.wiki.repository import WikiRepository
 from knowledge_assistant.infrastructure.database.repositories.wiki_repository import (
     SQLAlchemyWikiRepository,
 )
 from knowledge_assistant.infrastructure.database.session import (
     get_db_session,
+)
+from knowledge_assistant.application.wiki.services.semantic_matcher import (
+    EmbeddingWikiSemanticMatcher,
 )
 from knowledge_assistant.infrastructure.wiki.openrouter_wiki_compiler import (
     OpenRouterWikiCompiler,
@@ -68,6 +78,18 @@ def get_wiki_compiler() -> WikiCompiler:
     )
 
 
+
+def get_wiki_semantic_matcher(
+    embedding_service: Annotated[
+        EmbeddingService,
+        Depends(get_embedding_service),
+    ],
+) -> WikiSemanticMatcher:
+    return EmbeddingWikiSemanticMatcher(
+        embedding_service=embedding_service,
+        candidate_threshold=0.82,
+    )
+
 def get_compile_document_wiki_command(
     document_repository: Annotated[
         DocumentRepository,
@@ -85,12 +107,17 @@ def get_compile_document_wiki_command(
         WikiCompiler,
         Depends(get_wiki_compiler),
     ],
+    wiki_semantic_matcher: Annotated[
+        WikiSemanticMatcher,
+        Depends(get_wiki_semantic_matcher),
+    ],
 ) -> CompileDocumentWikiCommand:
     return CompileDocumentWikiCommand(
         document_repository=document_repository,
         document_chunk_repository=document_chunk_repository,
         wiki_repository=wiki_repository,
         wiki_compiler=wiki_compiler,
+        wiki_semantic_matcher=wiki_semantic_matcher,
     )
 
 
