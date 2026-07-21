@@ -160,6 +160,9 @@ export default function WikiGraphPage() {
   const graphPanelRef =
     useRef<HTMLDivElement | null>(null);
 
+  const initialNodesRef =
+    useRef<GraphNode[]>([]);
+
   const dragState =
     useRef<DragState | null>(null);
 
@@ -240,7 +243,17 @@ export default function WikiGraphPage() {
           }
         }
 
-        setNodes(graphNodes);
+        initialNodesRef.current =
+          graphNodes.map((node) => ({
+            ...node,
+          }));
+
+        setNodes(
+          graphNodes.map((node) => ({
+            ...node,
+          })),
+        );
+
         setEdges(
           Array.from(edgeMap.values()),
         );
@@ -528,7 +541,16 @@ export default function WikiGraphPage() {
   }
 
   function resetView() {
+    setNodes(
+      initialNodesRef.current.map(
+        (node) => ({
+          ...node,
+        }),
+      ),
+    );
+
     setZoom(1);
+
     setPan({
       x: 0,
       y: 0,

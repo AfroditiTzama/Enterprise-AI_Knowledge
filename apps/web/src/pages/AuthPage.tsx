@@ -5,6 +5,7 @@ import {
   UserRound,
 } from "lucide-react";
 import {
+  useEffect,
   useState,
   type FormEvent,
 } from "react";
@@ -36,7 +37,24 @@ export default function AuthPage() {
     useState("");
   const [error, setError] =
     useState("");
-  const [isLoading, setIsLoading] =
+
+  useEffect(() => {
+    const authNotice =
+      sessionStorage.getItem(
+        "auth_notice",
+      );
+
+    if (!authNotice) {
+      return;
+    }
+
+    sessionStorage.removeItem(
+      "auth_notice",
+    );
+
+    setError(authNotice);
+  }, []);
+const [isLoading, setIsLoading] =
     useState(false);
 
   async function handleSubmit(
@@ -68,7 +86,14 @@ export default function AuthPage() {
       });
     } catch (requestError) {
       setError(
-        getApiErrorMessage(requestError),
+        getApiErrorMessage(
+          requestError,
+          {
+            401: (
+              "Incorrect email or password."
+            ),
+          },
+        ),
       );
     } finally {
       setIsLoading(false);
