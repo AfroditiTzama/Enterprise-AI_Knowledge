@@ -13,6 +13,9 @@ import {
   useState,
 } from "react";
 import ReactMarkdown from "react-markdown";
+import {
+  useSearchParams,
+} from "react-router-dom";
 
 import {
   getDocumentChunkPreview,
@@ -47,6 +50,10 @@ function formatRevisionDate(
 }
 
 export default function WikiPage() {
+  const [searchParams] = useSearchParams();
+
+  const requestedSlug =
+    searchParams.get("slug");
   const [pages, setPages] =
     useState<WikiPageItem[]>([]);
   const [selectedSlug, setSelectedSlug] =
@@ -96,7 +103,15 @@ export default function WikiPage() {
         setPages(items);
 
         if (items.length > 0) {
-          setSelectedSlug(items[0].slug);
+          const requestedPage = items.find(
+            (item) =>
+              item.slug === requestedSlug,
+          );
+
+          setSelectedSlug(
+            requestedPage?.slug ??
+              items[0].slug,
+          );
         }
       } catch (requestError) {
         setError(
@@ -108,7 +123,7 @@ export default function WikiPage() {
     }
 
     void loadPages();
-  }, []);
+  }, [requestedSlug]);
 
   useEffect(() => {
     if (!selectedSlug) {

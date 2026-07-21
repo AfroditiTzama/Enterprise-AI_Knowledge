@@ -14,6 +14,7 @@ import AppShell from "./components/AppShell";
 import AssistantPage from "./pages/AssistantPage";
 import AuthPage from "./pages/AuthPage";
 import DocumentsPage from "./pages/DocumentsPage";
+import WikiGraphPage from "./pages/WikiGraphPage";
 import WikiPage from "./pages/WikiPage";
 
 function ProtectedRoute({
@@ -65,6 +66,11 @@ export default function App() {
         <Route
           path="/wiki"
           element={<WikiPage />}
+        />
+
+        <Route
+          path="/wiki/graph"
+          element={<WikiGraphPage />}
         />
 
         <Route
