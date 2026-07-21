@@ -1,17 +1,19 @@
 import axios from "axios";
 
+import {
+  SESSION_EXPIRED_EVENT,
+} from "./auth-events";
+
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL,
   timeout: 180_000,
 });
 
 apiClient.interceptors.request.use((config) => {
-  const accessToken =
-    localStorage.getItem("access_token");
+  const accessToken = localStorage.getItem("access_token");
 
   if (accessToken) {
-    config.headers.Authorization =
-      `Bearer ${accessToken}`;
+    config.headers.Authorization = `Bearer ${accessToken}`;
   }
 
   return config;
@@ -20,16 +22,11 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    const status =
-      error.response?.status;
-
-    const requestUrl =
-      String(error.config?.url ?? "");
-
+    const status = error.response?.status;
+    const requestUrl = String(error.config?.url ?? "");
     const isAuthenticationRequest =
       requestUrl.includes("/auth/login") ||
       requestUrl.includes("/auth/register");
-
     const hasStoredToken = Boolean(
       localStorage.getItem("access_token"),
     );
@@ -39,19 +36,14 @@ apiClient.interceptors.response.use(
       hasStoredToken &&
       !isAuthenticationRequest
     ) {
-      localStorage.removeItem(
-        "access_token",
-      );
-
+      localStorage.removeItem("access_token");
       sessionStorage.setItem(
         "auth_notice",
-        (
-          "Your session has expired. " +
-          "Please sign in again."
-        ),
+        "Your session has expired. Please sign in again.",
       );
-
-      window.location.assign("/");
+      window.dispatchEvent(
+        new Event(SESSION_EXPIRED_EVENT),
+      );
     }
 
     return Promise.reject(error);

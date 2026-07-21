@@ -5,7 +5,10 @@ import {
   LogOut,
   Menu,
   MessageSquareText,
+  Moon,
   Network,
+  Sun,
+  UserRound,
   X,
 } from "lucide-react";
 import {
@@ -17,12 +20,14 @@ import {
   NavLink,
   Outlet,
   useLocation,
-  useNavigate,
 } from "react-router-dom";
 
 import {
-  removeAccessToken,
-} from "../api/auth";
+  useAuth,
+} from "../context/AuthContext";
+import {
+  useTheme,
+} from "../context/ThemeContext";
 
 const navItems = [
   {
@@ -45,16 +50,19 @@ const navItems = [
     label: "Assistant",
     icon: MessageSquareText,
   },
+  {
+    to: "/profile",
+    label: "My Profile",
+    icon: UserRound,
+  },
 ];
 
 export default function AppShell() {
-  const navigate = useNavigate();
   const location = useLocation();
-
-  const [
-    isSidebarOpen,
-    setIsSidebarOpen,
-  ] = useState(false);
+  const { signOut } = useAuth();
+  const { resolvedTheme, toggleTheme } = useTheme();
+  const [isSidebarOpen, setIsSidebarOpen] =
+    useState(false);
 
   const activeLabel = useMemo(() => {
     const sortedItems = [...navItems].sort(
@@ -66,9 +74,7 @@ export default function AppShell() {
       sortedItems.find(
         (item) =>
           location.pathname === item.to ||
-          location.pathname.startsWith(
-            `${item.to}/`,
-          ),
+          location.pathname.startsWith(`${item.to}/`),
       )?.label ?? "Knowledge AI"
     );
   }, [location.pathname]);
@@ -82,43 +88,30 @@ export default function AppShell() {
       return;
     }
 
-    const previousOverflow =
-      document.body.style.overflow;
-
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
-    function handleKeyDown(
-      event: KeyboardEvent,
-    ) {
+    function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setIsSidebarOpen(false);
       }
     }
 
-    window.addEventListener(
-      "keydown",
-      handleKeyDown,
-    );
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow =
-        previousOverflow;
-
-      window.removeEventListener(
-        "keydown",
-        handleKeyDown,
-      );
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isSidebarOpen]);
 
   function handleLogout() {
-    removeAccessToken();
     setIsSidebarOpen(false);
-
-    navigate("/", {
-      replace: true,
-    });
+    signOut();
   }
+
+  const ThemeIcon =
+    resolvedTheme === "dark" ? Sun : Moon;
 
   return (
     <div className="app-shell">
@@ -126,9 +119,7 @@ export default function AppShell() {
         <button
           type="button"
           className="mobile-nav-button"
-          onClick={() =>
-            setIsSidebarOpen(true)
-          }
+          onClick={() => setIsSidebarOpen(true)}
           aria-label="Open navigation menu"
           aria-expanded={isSidebarOpen}
           aria-controls="application-sidebar"
@@ -137,9 +128,20 @@ export default function AppShell() {
         </button>
 
         <div className="mobile-topbar-brand">
-          <BrainCircuit size={22} />
+          <BrainCircuit size={21} />
           <span>{activeLabel}</span>
         </div>
+
+        <button
+          type="button"
+          className="mobile-nav-button"
+          onClick={toggleTheme}
+          aria-label={`Switch to ${
+            resolvedTheme === "dark" ? "light" : "dark"
+          } mode`}
+        >
+          <ThemeIcon size={20} />
+        </button>
       </header>
 
       <button
@@ -149,9 +151,7 @@ export default function AppShell() {
             ? "sidebar-overlay open"
             : "sidebar-overlay"
         }
-        onClick={() =>
-          setIsSidebarOpen(false)
-        }
+        onClick={() => setIsSidebarOpen(false)}
         tabIndex={isSidebarOpen ? 0 : -1}
         aria-label="Close navigation menu"
         aria-hidden={!isSidebarOpen}
@@ -159,31 +159,30 @@ export default function AppShell() {
 
       <aside
         id="application-sidebar"
-        className={
-          isSidebarOpen
-            ? "sidebar open"
-            : "sidebar"
-        }
+        className={isSidebarOpen ? "sidebar open" : "sidebar"}
       >
         <div className="sidebar-header-row">
           <div className="sidebar-brand">
-            <BrainCircuit size={28} />
-            <span>Knowledge AI</span>
+            <span className="sidebar-logo">
+              <BrainCircuit size={24} />
+            </span>
+            <div>
+              <strong>Knowledge AI</strong>
+              <span>Enterprise workspace</span>
+            </div>
           </div>
 
           <button
             type="button"
             className="mobile-sidebar-close"
-            onClick={() =>
-              setIsSidebarOpen(false)
-            }
+            onClick={() => setIsSidebarOpen(false)}
             aria-label="Close navigation menu"
           >
             <X size={20} />
           </button>
         </div>
 
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" aria-label="Main navigation">
           {navItems.map((item) => {
             const Icon = item.icon;
 
@@ -192,13 +191,9 @@ export default function AppShell() {
                 key={item.to}
                 to={item.to}
                 end={item.to === "/wiki"}
-                onClick={() =>
-                  setIsSidebarOpen(false)
-                }
+                onClick={() => setIsSidebarOpen(false)}
                 className={({ isActive }) =>
-                  isActive
-                    ? "nav-item active"
-                    : "nav-item"
+                  isActive ? "nav-item active" : "nav-item"
                 }
               >
                 <Icon size={19} />
@@ -208,14 +203,29 @@ export default function AppShell() {
           })}
         </nav>
 
-        <button
-          type="button"
-          className="logout-button"
-          onClick={handleLogout}
-        >
-          <LogOut size={18} />
-          <span>Sign out</span>
-        </button>
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className="sidebar-action"
+            onClick={toggleTheme}
+          >
+            <ThemeIcon size={18} />
+            <span>
+              {resolvedTheme === "dark"
+                ? "Light appearance"
+                : "Dark appearance"}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            className="sidebar-action danger-text"
+            onClick={handleLogout}
+          >
+            <LogOut size={18} />
+            <span>Sign out</span>
+          </button>
+        </div>
       </aside>
 
       <main className="app-content">

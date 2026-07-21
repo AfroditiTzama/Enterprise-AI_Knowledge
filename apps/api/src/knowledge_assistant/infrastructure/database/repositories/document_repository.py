@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from knowledge_assistant.domain.documents.entities import Document
@@ -11,6 +11,14 @@ from knowledge_assistant.infrastructure.database.mappers.document_mapper import 
 from knowledge_assistant.infrastructure.database.models.document import (
     DocumentModel,
 )
+from knowledge_assistant.infrastructure.database.models.document_chunk import (
+    DocumentChunkModel,
+)
+from knowledge_assistant.infrastructure.database.models.wiki import (
+    WikiPageModel,
+    WikiPageRevisionModel,
+    WikiPageSourceModel,
+)
 
 
 class SQLAlchemyDocumentRepository(DocumentRepository):
@@ -19,12 +27,9 @@ class SQLAlchemyDocumentRepository(DocumentRepository):
 
     async def add(self, document: Document) -> Document:
         document_model = DocumentMapper.to_model(document)
-
         self._session.add(document_model)
-
         await self._session.flush()
         await self._session.refresh(document_model)
-
         return DocumentMapper.to_domain(document_model)
 
     async def update(self, document: Document) -> Document:
@@ -34,9 +39,7 @@ class SQLAlchemyDocumentRepository(DocumentRepository):
         )
 
         if document_model is None:
-            raise ValueError(
-                f"Document not found: {document.id}"
-            )
+            raise ValueError(f"Document not found: {document.id}")
 
         document_model.owner_id = document.owner_id
         document_model.original_filename = document.original_filename
@@ -50,7 +53,6 @@ class SQLAlchemyDocumentRepository(DocumentRepository):
 
         await self._session.flush()
         await self._session.refresh(document_model)
-
         return DocumentMapper.to_domain(document_model)
 
     async def get_by_id(
@@ -60,7 +62,6 @@ class SQLAlchemyDocumentRepository(DocumentRepository):
         statement = select(DocumentModel).where(
             DocumentModel.id == document_id
         )
-
         result = await self._session.execute(statement)
         document_model = result.scalar_one_or_none()
 
@@ -78,7 +79,6 @@ class SQLAlchemyDocumentRepository(DocumentRepository):
             .where(DocumentModel.owner_id == owner_id)
             .order_by(DocumentModel.created_at.desc())
         )
-
         result = await self._session.execute(statement)
         document_models = result.scalars().all()
 
@@ -86,3 +86,43 @@ class SQLAlchemyDocumentRepository(DocumentRepository):
             DocumentMapper.to_domain(document_model)
             for document_model in document_models
         ]
+
+    async def delete(self, document_id: UUID) -> None:
+        chunk_result = await self._session.execute(
+            select(DocumentChunkModel.id).where(
+                DocumentChunkModel.document_id == document_id
+            )
+        )
+        chunk_ids = list(chunk_result.scalars().all())
+
+        if chunk_ids:
+            await self._session.execute(
+                delete(WikiPageSourceModel).where(
+                    WikiPageSourceModel.chunk_id.in_(chunk_ids)
+                )
+            )
+
+        await self._session.execute(
+            delete(DocumentChunkModel).where(
+                DocumentChunkModel.document_id == document_id
+            )
+        )
+        await self._session.execute(
+            update(WikiPageModel)
+            .where(WikiPageModel.document_id == document_id)
+            .values(document_id=None)
+        )
+        await self._session.execute(
+            update(WikiPageRevisionModel)
+            .where(
+                WikiPageRevisionModel.triggering_document_id
+                == document_id
+            )
+            .values(triggering_document_id=None)
+        )
+        await self._session.execute(
+            delete(DocumentModel).where(
+                DocumentModel.id == document_id
+            )
+        )
+        await self._session.flush()

@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -38,3 +39,4 @@ class CurrentUserResponse(BaseModel):
     full_name: str
     is_active: bool
     is_verified: bool
+    created_at: datetime

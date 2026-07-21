@@ -111,4 +111,5 @@ async def get_me(
         full_name=current_user.full_name,
         is_active=current_user.is_active,
         is_verified=current_user.is_verified,
+        created_at=current_user.created_at,
     )

@@ -142,7 +142,7 @@ export default function SourcePreviewDrawer({
 
                 {content.score !== undefined && (
                   <span>
-                    Similarity{" "}
+                    Relevance{" "}
                     {content.score.toFixed(3)}
                   </span>
                 )}
