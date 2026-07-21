@@ -121,3 +121,39 @@ export async function processDocument(
     ),
   };
 }
+
+export interface DocumentChunkPreview {
+  chunk_id: string;
+  document_id: string;
+  document_filename: string;
+  chunk_index: number;
+  page_number: number | null;
+  text: string;
+}
+
+export async function getDocumentChunkPreview(
+  chunkId: string,
+): Promise<DocumentChunkPreview> {
+  const response =
+    await apiClient.get<DocumentChunkPreview>(
+      `/documents/chunks/${encodeURIComponent(
+        chunkId,
+      )}`,
+    );
+
+  return response.data;
+}
+
+export async function getDocumentChunkPreviewByLocation(
+  documentId: string,
+  chunkIndex: number,
+): Promise<DocumentChunkPreview> {
+  const response =
+    await apiClient.get<DocumentChunkPreview>(
+      `/documents/${encodeURIComponent(
+        documentId,
+      )}/chunks/${chunkIndex}`,
+    );
+
+  return response.data;
+}

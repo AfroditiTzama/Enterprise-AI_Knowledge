@@ -42,6 +42,29 @@ class SQLAlchemyDocumentChunkRepository(DocumentChunkRepository):
 
         await self._session.flush()
 
+    async def get_by_id(
+        self,
+        chunk_id: UUID,
+    ) -> DocumentChunkEntity | None:
+        statement = select(
+            DocumentChunkModel
+        ).where(
+            DocumentChunkModel.id == chunk_id
+        )
+
+        result = await self._session.execute(
+            statement
+        )
+
+        chunk_model = result.scalar_one_or_none()
+
+        if chunk_model is None:
+            return None
+
+        return DocumentChunkMapper.to_domain(
+            chunk_model
+        )
+
     async def list_by_document_id(
         self,
         document_id: UUID,

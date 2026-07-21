@@ -24,3 +24,11 @@ class ProcessDocumentResponse(BaseModel):
     extracted_characters: int
     chunks_count: int
     text_preview: str
+
+class DocumentChunkPreviewResponse(BaseModel):
+    chunk_id: UUID
+    document_id: UUID
+    document_filename: str
+    chunk_index: int
+    page_number: int | None
+    text: str

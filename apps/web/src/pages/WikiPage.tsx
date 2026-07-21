@@ -15,8 +15,14 @@ import {
 import ReactMarkdown from "react-markdown";
 
 import {
+  getDocumentChunkPreview,
+} from "../api/documents";
+import {
   getApiErrorMessage,
 } from "../api/errors";
+import SourcePreviewDrawer, {
+  type SourcePreviewContent,
+} from "../components/SourcePreviewDrawer";
 import {
   getWikiPage,
   listWikiPageRevisions,
@@ -25,6 +31,7 @@ import {
   type WikiPageItem,
   type WikiPageReferenceItem,
   type WikiPageRevisionItem,
+  type WikiPageSourceItem,
 } from "../api/wiki";
 
 function formatRevisionDate(
@@ -60,6 +67,24 @@ export default function WikiPage() {
     useState("");
   const [detailsError, setDetailsError] =
     useState("");
+  const [
+    isSourcePreviewOpen,
+    setIsSourcePreviewOpen,
+  ] = useState(false);
+  const [
+    isSourcePreviewLoading,
+    setIsSourcePreviewLoading,
+  ] = useState(false);
+  const [
+    sourcePreviewError,
+    setSourcePreviewError,
+  ] = useState("");
+  const [
+    sourcePreviewContent,
+    setSourcePreviewContent,
+  ] = useState<SourcePreviewContent | null>(
+    null,
+  );
 
   useEffect(() => {
     async function loadPages() {
@@ -160,6 +185,44 @@ export default function WikiPage() {
     reference: WikiPageReferenceItem,
   ) {
     setSelectedSlug(reference.slug);
+  }
+
+  async function openSourcePreview(
+    source: WikiPageSourceItem,
+  ) {
+    setIsSourcePreviewOpen(true);
+    setIsSourcePreviewLoading(true);
+    setSourcePreviewError("");
+    setSourcePreviewContent(null);
+
+    try {
+      const preview =
+        await getDocumentChunkPreview(
+          source.chunk_id,
+        );
+
+      setSourcePreviewContent({
+        title: preview.document_filename,
+        sourceLabel: "Original document",
+        locationLabel:
+          preview.page_number !== null
+            ? `Page ${preview.page_number}`
+            : `Chunk ${
+                preview.chunk_index + 1
+              }`,
+        text: preview.text,
+      });
+    } catch (requestError) {
+      setSourcePreviewError(
+        getApiErrorMessage(requestError),
+      );
+    } finally {
+      setIsSourcePreviewLoading(false);
+    }
+  }
+
+  function closeSourcePreview() {
+    setIsSourcePreviewOpen(false);
   }
 
   return (
@@ -365,9 +428,15 @@ export default function WikiPage() {
                       <div className="wiki-source-list">
                         {pageDetails.sources.map(
                           (source) => (
-                            <div
+                            <button
+                              type="button"
                               key={source.chunk_id}
                               className="wiki-source-card"
+                              onClick={() =>
+                                void openSourcePreview(
+                                  source,
+                                )
+                              }
                             >
                               <FileText size={18} />
 
@@ -388,7 +457,7 @@ export default function WikiPage() {
                                       }`}
                                 </span>
                               </div>
-                            </div>
+                            </button>
                           ),
                         )}
                       </div>
@@ -485,6 +554,13 @@ export default function WikiPage() {
           </article>
         </div>
       )}
+      <SourcePreviewDrawer
+        isOpen={isSourcePreviewOpen}
+        isLoading={isSourcePreviewLoading}
+        error={sourcePreviewError}
+        content={sourcePreviewContent}
+        onClose={closeSourcePreview}
+      />
     </section>
   );
 }

@@ -10,6 +10,9 @@ from knowledge_assistant.application.documents.commands.process_document import 
 from knowledge_assistant.application.documents.commands.upload_document import (
     UploadDocumentCommand,
 )
+from knowledge_assistant.application.documents.queries.get_document_chunk_preview import (
+    GetDocumentChunkPreviewQuery,
+)
 from knowledge_assistant.application.documents.queries.list_documents import (
     ListDocumentsQuery,
 )
@@ -108,6 +111,24 @@ def get_vector_store() -> VectorStore:
     )
 
 
+def get_document_chunk_preview_query(
+    document_repository: Annotated[
+        DocumentRepository,
+        Depends(get_document_repository),
+    ],
+    document_chunk_repository: Annotated[
+        DocumentChunkRepository,
+        Depends(get_document_chunk_repository),
+    ],
+) -> GetDocumentChunkPreviewQuery:
+    return GetDocumentChunkPreviewQuery(
+        document_repository=document_repository,
+        document_chunk_repository=(
+            document_chunk_repository
+        ),
+    )
+
+
 def get_upload_document_command(
     document_repository: Annotated[
         DocumentRepository,
@@ -189,4 +210,10 @@ ProcessDocumentCommandDependency = Annotated[
 ListDocumentsQueryDependency = Annotated[
     ListDocumentsQuery,
     Depends(get_list_documents_query),
+]
+
+
+GetDocumentChunkPreviewQueryDependency = Annotated[
+    GetDocumentChunkPreviewQuery,
+    Depends(get_document_chunk_preview_query),
 ]
