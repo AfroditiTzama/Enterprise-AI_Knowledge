@@ -1,5 +1,6 @@
 import {
   Bot,
+  Info,
   LoaderCircle,
   Send,
   Sparkles,
@@ -24,6 +25,7 @@ import {
 import {
   getWikiPage,
 } from "../api/wiki";
+import FeedbackBanner from "../components/FeedbackBanner";
 import SourcePreviewDrawer, {
   type SourcePreviewContent,
 } from "../components/SourcePreviewDrawer";
@@ -37,42 +39,27 @@ interface ChatMessage {
 }
 
 const suggestedQuestions = [
-  "Summarize the main topics in my documents.",
-  "What experience and projects are described?",
-  "Which technologies appear most often?",
+  "Summarize the main topics in my knowledge base.",
+  "What are the most important findings across my documents?",
+  "Compare the key ideas in my uploaded documents.",
+  "Which sources support the main conclusions?",
 ];
 
 export default function AssistantPage() {
-  const [question, setQuestion] =
-    useState("");
-  const [messages, setMessages] =
-    useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] =
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [failedQuestion, setFailedQuestion] = useState("");
+  const [isSourcePreviewOpen, setIsSourcePreviewOpen] =
     useState(false);
-  const [error, setError] =
-    useState("");
-  const [
-    isSourcePreviewOpen,
-    setIsSourcePreviewOpen,
-  ] = useState(false);
-  const [
-    isSourcePreviewLoading,
-    setIsSourcePreviewLoading,
-  ] = useState(false);
-  const [
-    sourcePreviewError,
-    setSourcePreviewError,
-  ] = useState("");
-  const [
-    sourcePreviewContent,
-    setSourcePreviewContent,
-  ] = useState<SourcePreviewContent | null>(
-    null,
-  );
+  const [isSourcePreviewLoading, setIsSourcePreviewLoading] =
+    useState(false);
+  const [sourcePreviewError, setSourcePreviewError] = useState("");
+  const [sourcePreviewContent, setSourcePreviewContent] =
+    useState<SourcePreviewContent | null>(null);
 
-  async function submitQuestion(
-    value: string,
-  ) {
+  async function submitQuestion(value: string) {
     const cleanedQuestion = value.trim();
 
     if (!cleanedQuestion || isLoading) {
@@ -80,6 +67,7 @@ export default function AssistantPage() {
     }
 
     setError("");
+    setFailedQuestion("");
     setQuestion("");
     setMessages((current) => [
       ...current,
@@ -92,46 +80,35 @@ export default function AssistantPage() {
     setIsLoading(true);
 
     try {
-      const response =
-        await askKnowledge(cleanedQuestion);
+      const response = await askKnowledge(cleanedQuestion);
 
       setMessages((current) => [
         ...current,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content:
-            response.answer_markdown,
-          retrievalMode:
-            response.retrieval_mode,
+          content: response.answer_markdown,
+          retrievalMode: response.retrieval_mode,
           sources: response.sources,
         },
       ]);
     } catch (requestError) {
-      setError(
-        getApiErrorMessage(requestError),
-      );
+      setFailedQuestion(cleanedQuestion);
+      setError(getApiErrorMessage(requestError));
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function openSourcePreview(
-    source: KnowledgeSource,
-  ) {
+  async function openSourcePreview(source: KnowledgeSource) {
     setIsSourcePreviewOpen(true);
     setIsSourcePreviewLoading(true);
     setSourcePreviewError("");
     setSourcePreviewContent(null);
 
     try {
-      if (
-        source.source_type === "wiki_page" &&
-        source.slug
-      ) {
-        const page = await getWikiPage(
-          source.slug,
-        );
+      if (source.source_type === "wiki_page" && source.slug) {
+        const page = await getWikiPage(source.slug);
 
         setSourcePreviewContent({
           title: page.title,
@@ -141,7 +118,6 @@ export default function AssistantPage() {
           score: source.score,
           isMarkdown: true,
         });
-
         return;
       }
 
@@ -161,13 +137,10 @@ export default function AssistantPage() {
           locationLabel:
             preview.page_number !== null
               ? `Page ${preview.page_number}`
-              : `Chunk ${
-                  preview.chunk_index + 1
-                }`,
+              : `Chunk ${preview.chunk_index + 1}`,
           text: preview.text,
           score: source.score,
         });
-
         return;
       }
 
@@ -175,21 +148,13 @@ export default function AssistantPage() {
         "Preview is unavailable for this source.",
       );
     } catch (requestError) {
-      setSourcePreviewError(
-        getApiErrorMessage(requestError),
-      );
+      setSourcePreviewError(getApiErrorMessage(requestError));
     } finally {
       setIsSourcePreviewLoading(false);
     }
   }
 
-  function closeSourcePreview() {
-    setIsSourcePreviewOpen(false);
-  }
-
-  function handleSubmit(
-    event: FormEvent<HTMLFormElement>,
-  ) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void submitQuestion(question);
   }
@@ -198,15 +163,11 @@ export default function AssistantPage() {
     <section className="page-container assistant-page">
       <header className="page-header">
         <div>
-          <p className="eyebrow">
-            Grounded intelligence
-          </p>
-
+          <p className="eyebrow">Grounded intelligence</p>
           <h1>Knowledge Assistant</h1>
-
           <p>
-            Ask questions across your compiled
-            Wiki and original document chunks.
+            Ask questions across your Wiki and original document
+            chunks, with traceable sources in every answer.
           </p>
         </div>
       </header>
@@ -216,35 +177,35 @@ export default function AssistantPage() {
           {messages.length === 0 ? (
             <div className="assistant-welcome">
               <div className="assistant-avatar">
-                <Sparkles size={28} />
+                <Sparkles size={27} />
               </div>
 
-              <h2>
-                Ask your knowledge base
-              </h2>
-
+              <p className="eyebrow">Your research copilot</p>
+              <h2>Hi, I’m your Knowledge Assistant.</h2>
               <p>
-                Answers are generated from your
-                documents and include traceable
-                sources.
+                I answer questions using only your uploaded documents
+                and compiled Wiki pages. Open any source card to inspect
+                the evidence behind an answer.
               </p>
 
+              <div className="assistant-info-note">
+                <Info size={17} />
+                <span>
+                  Source score shows retrieval relevance, not the
+                  probability that an answer is correct.
+                </span>
+              </div>
+
               <div className="suggestion-grid">
-                {suggestedQuestions.map(
-                  (suggestion) => (
-                    <button
-                      type="button"
-                      key={suggestion}
-                      onClick={() =>
-                        void submitQuestion(
-                          suggestion,
-                        )
-                      }
-                    >
-                      {suggestion}
-                    </button>
-                  ),
-                )}
+                {suggestedQuestions.map((suggestion) => (
+                  <button
+                    type="button"
+                    key={suggestion}
+                    onClick={() => void submitQuestion(suggestion)}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
               </div>
             </div>
           ) : (
@@ -262,9 +223,7 @@ export default function AssistantPage() {
                 </div>
 
                 <div className="message-content">
-                  <ReactMarkdown>
-                    {message.content}
-                  </ReactMarkdown>
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
 
                   {message.retrievalMode && (
                     <span className="retrieval-mode">
@@ -272,45 +231,36 @@ export default function AssistantPage() {
                     </span>
                   )}
 
-                  {message.sources &&
-                    message.sources.length > 0 && (
-                      <div className="source-list">
+                  {message.sources && message.sources.length > 0 && (
+                    <div className="source-list">
+                      <div className="source-list-heading">
                         <h3>Sources</h3>
-
-                        {message.sources.map(
-                          (source) => (
-                            <button
-                              type="button"
-                              className="source-card"
-                              key={`${message.id}-${source.source_id}`}
-                              onClick={() =>
-                                void openSourcePreview(
-                                  source,
-                                )
-                              }
-                            >
-                              <strong>
-                                {source.source_id}:{" "}
-                                {source.title}
-                              </strong>
-
-                              <span>
-                                {source.source_type}
-                                {source.page_number !==
-                                null
-                                  ? ` · page ${source.page_number}`
-                                  : ""}
-                                {" · "}
-                                score{" "}
-                                {source.score.toFixed(
-                                  3,
-                                )}
-                              </span>
-                            </button>
-                          ),
-                        )}
+                        <span>Click to inspect</span>
                       </div>
-                    )}
+
+                      {message.sources.map((source) => (
+                        <button
+                          type="button"
+                          className="source-card"
+                          key={`${message.id}-${source.source_id}`}
+                          onClick={() =>
+                            void openSourcePreview(source)
+                          }
+                        >
+                          <strong>
+                            {source.source_id}: {source.title}
+                          </strong>
+                          <span>
+                            {source.source_type}
+                            {source.page_number !== null
+                              ? ` · page ${source.page_number}`
+                              : ""}
+                            {` · relevance ${source.score.toFixed(3)}`}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </article>
             ))
@@ -321,12 +271,8 @@ export default function AssistantPage() {
               <div className="message-avatar">
                 <Bot size={18} />
               </div>
-
               <div className="message-content typing-message">
-                <LoaderCircle
-                  className="spin"
-                  size={19}
-                />
+                <LoaderCircle className="spin" size={19} />
                 Searching your knowledge base...
               </div>
             </div>
@@ -334,28 +280,28 @@ export default function AssistantPage() {
         </div>
 
         {error && (
-          <div className="error-message chat-error">
-            {error}
+          <div className="chat-feedback">
+            <FeedbackBanner
+              kind="error"
+              message={error}
+              onRetry={
+                failedQuestion
+                  ? () => void submitQuestion(failedQuestion)
+                  : undefined
+              }
+            />
           </div>
         )}
 
-        <form
-          className="chat-composer"
-          onSubmit={handleSubmit}
-        >
+        <form className="chat-composer" onSubmit={handleSubmit}>
           <textarea
             value={question}
-            onChange={(event) =>
-              setQuestion(event.target.value)
-            }
-            placeholder="Ask a question about your documents..."
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder="Ask a question about your knowledge base..."
             rows={2}
             disabled={isLoading}
             onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey
-              ) {
+              if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
                 void submitQuestion(question);
               }
@@ -365,22 +311,20 @@ export default function AssistantPage() {
           <button
             type="submit"
             className="primary-button icon-button"
-            disabled={
-              isLoading ||
-              question.trim().length < 2
-            }
+            disabled={isLoading || question.trim().length < 2}
             aria-label="Send question"
           >
             <Send size={19} />
           </button>
         </form>
       </div>
+
       <SourcePreviewDrawer
         isOpen={isSourcePreviewOpen}
         isLoading={isSourcePreviewLoading}
         error={sourcePreviewError}
         content={sourcePreviewContent}
-        onClose={closeSourcePreview}
+        onClose={() => setIsSourcePreviewOpen(false)}
       />
     </section>
   );

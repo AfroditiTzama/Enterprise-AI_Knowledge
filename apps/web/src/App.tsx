@@ -7,13 +7,14 @@ import {
   Routes,
 } from "react-router-dom";
 
-import {
-  isAuthenticated,
-} from "./api/auth";
 import AppShell from "./components/AppShell";
+import {
+  useAuth,
+} from "./context/AuthContext";
 import AssistantPage from "./pages/AssistantPage";
 import AuthPage from "./pages/AuthPage";
 import DocumentsPage from "./pages/DocumentsPage";
+import ProfilePage from "./pages/ProfilePage";
 import WikiGraphPage from "./pages/WikiGraphPage";
 import WikiPage from "./pages/WikiPage";
 
@@ -22,32 +23,28 @@ function ProtectedRoute({
 }: {
   children: ReactNode;
 }) {
-  if (!isAuthenticated()) {
-    return (
-      <Navigate
-        to="/"
-        replace
-      />
-    );
+  const { isAuthenticated } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/" replace />;
   }
 
   return children;
 }
 
 export default function App() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <Routes>
       <Route
         path="/"
         element={
-          isAuthenticated()
-            ? (
-              <Navigate
-                to="/dashboard"
-                replace
-              />
-            )
-            : <AuthPage />
+          isAuthenticated ? (
+            <Navigate to="/dashboard" replace />
+          ) : (
+            <AuthPage />
+          )
         }
       />
 
@@ -58,36 +55,14 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route
-          path="/dashboard"
-          element={<DocumentsPage />}
-        />
-
-        <Route
-          path="/wiki"
-          element={<WikiPage />}
-        />
-
-        <Route
-          path="/wiki/graph"
-          element={<WikiGraphPage />}
-        />
-
-        <Route
-          path="/assistant"
-          element={<AssistantPage />}
-        />
+        <Route path="/dashboard" element={<DocumentsPage />} />
+        <Route path="/wiki" element={<WikiPage />} />
+        <Route path="/wiki/graph" element={<WikiGraphPage />} />
+        <Route path="/assistant" element={<AssistantPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
       </Route>
 
-      <Route
-        path="*"
-        element={
-          <Navigate
-            to="/"
-            replace
-          />
-        }
-      />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

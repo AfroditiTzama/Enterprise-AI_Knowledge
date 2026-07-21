@@ -24,9 +24,13 @@ import {
   getApiErrorMessage,
 } from "../api/errors";
 import {
+  withApiRetry,
+} from "../api/retry";
+import {
   getWikiPage,
   listWikiPages,
 } from "../api/wiki";
+import FeedbackBanner from "../components/FeedbackBanner";
 
 interface GraphNode {
   id: string;
@@ -157,6 +161,12 @@ export default function WikiGraphPage() {
   const [error, setError] =
     useState("");
 
+  const [isRetrying, setIsRetrying] =
+    useState(false);
+
+  const [reloadKey, setReloadKey] =
+    useState(0);
+
   const graphPanelRef =
     useRef<HTMLDivElement | null>(null);
 
@@ -173,50 +183,53 @@ export default function WikiGraphPage() {
     let isCurrentRequest = true;
 
     async function loadGraph() {
+      setError("");
+      setIsLoading(true);
+      setIsRetrying(false);
+
       try {
-        setError("");
+        const [pages, details] = await withApiRetry(
+          async () => {
+            const wikiPages = await listWikiPages();
+            const wikiDetails = await Promise.all(
+              wikiPages.map((page) =>
+                getWikiPage(page.slug),
+              ),
+            );
 
-        const pages = await listWikiPages();
-
-        const details = await Promise.all(
-          pages.map((page) =>
-            getWikiPage(page.slug),
-          ),
+            return [wikiPages, wikiDetails] as const;
+          },
+          {
+            retries: 2,
+            onRetry: () => {
+              if (isCurrentRequest) {
+                setIsRetrying(true);
+              }
+            },
+          },
         );
 
         if (!isCurrentRequest) {
           return;
         }
 
-        const positions =
-          createNodePositions(pages.length);
-
+        const positions = createNodePositions(pages.length);
         const graphNodes = pages.map(
           (page, index): GraphNode => ({
             id: page.id,
             slug: page.slug,
             title: page.title,
             summary: page.summary,
-            isGlobal:
-              page.document_id === null,
+            isGlobal: page.document_id === null,
             x: positions[index].x,
             y: positions[index].y,
           }),
         );
-
-        const edgeMap = new Map<
-          string,
-          GraphEdge
-        >();
+        const edgeMap = new Map<string, GraphEdge>();
 
         for (const detail of details) {
-          for (
-            const related
-            of detail.related_pages
-          ) {
-            const edgeId =
-              `${detail.slug}:${related.slug}`;
-
+          for (const related of detail.related_pages) {
+            const edgeId = `${detail.slug}:${related.slug}`;
             edgeMap.set(edgeId, {
               id: edgeId,
               sourceSlug: detail.slug,
@@ -225,12 +238,8 @@ export default function WikiGraphPage() {
             });
           }
 
-          for (
-            const backlink
-            of detail.backlinks
-          ) {
-            const edgeId =
-              `${backlink.slug}:${detail.slug}`;
+          for (const backlink of detail.backlinks) {
+            const edgeId = `${backlink.slug}:${detail.slug}`;
 
             if (!edgeMap.has(edgeId)) {
               edgeMap.set(edgeId, {
@@ -243,29 +252,21 @@ export default function WikiGraphPage() {
           }
         }
 
-        initialNodesRef.current =
-          graphNodes.map((node) => ({
-            ...node,
-          }));
-
-        setNodes(
-          graphNodes.map((node) => ({
-            ...node,
-          })),
-        );
-
-        setEdges(
-          Array.from(edgeMap.values()),
-        );
+        initialNodesRef.current = graphNodes.map((node) => ({
+          ...node,
+        }));
+        setNodes(graphNodes.map((node) => ({ ...node })));
+        setEdges(Array.from(edgeMap.values()));
       } catch (requestError) {
         if (isCurrentRequest) {
-          setError(
-            getApiErrorMessage(requestError),
-          );
+          setError(getApiErrorMessage(requestError));
+          setNodes([]);
+          setEdges([]);
         }
       } finally {
         if (isCurrentRequest) {
           setIsLoading(false);
+          setIsRetrying(false);
         }
       }
     }
@@ -275,7 +276,7 @@ export default function WikiGraphPage() {
     return () => {
       isCurrentRequest = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   useEffect(() => {
     function handleFullscreenChange() {
@@ -541,6 +542,7 @@ export default function WikiGraphPage() {
   }
 
   function resetView() {
+    setQuery("");
     setNodes(
       initialNodesRef.current.map(
         (node) => ({
@@ -604,13 +606,24 @@ export default function WikiGraphPage() {
         </div>
       </header>
 
-      {error && (
-        <div className="error-message">
-          {error}
-        </div>
+      {isRetrying && (
+        <FeedbackBanner
+          kind="retrying"
+          message="The server is waking up. Retrying…"
+        />
       )}
 
-      {isLoading ? (
+      {error && !isRetrying && (
+        <FeedbackBanner
+          kind="error"
+          message={error}
+          onRetry={() =>
+            setReloadKey((current) => current + 1)
+          }
+        />
+      )}
+
+      {isLoading && !isRetrying ? (
         <div className="loading-panel">
           <LoaderCircle
             className="spin"
@@ -618,7 +631,7 @@ export default function WikiGraphPage() {
           />
           Building knowledge graph...
         </div>
-      ) : nodes.length === 0 ? (
+      ) : error ? null : nodes.length === 0 ? (
         <section className="empty-state">
           <div className="empty-icon">
             <Network size={30} />

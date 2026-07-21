@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from knowledge_assistant.bootstrap.dependencies.document import (
+    DeleteDocumentCommandDependency,
     GetDocumentChunkPreviewQueryDependency,
     ListDocumentsQueryDependency,
     ProcessDocumentCommandDependency,
@@ -83,6 +84,28 @@ async def list_documents(
         DocumentResponse.model_validate(document)
         for document in documents
     ]
+
+
+@router.delete(
+    "/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_document(
+    document_id: UUID,
+    current_user: CurrentUserDependency,
+    command: DeleteDocumentCommandDependency,
+) -> None:
+    try:
+        await command.execute(
+            document_id=document_id,
+            owner_id=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
 
 @router.get(
     "/chunks/{chunk_id}",

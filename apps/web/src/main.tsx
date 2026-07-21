@@ -9,14 +9,22 @@ import {
 } from "react-router-dom";
 
 import App from "./App";
+import {
+  AuthProvider,
+} from "./context/AuthContext";
+import {
+  ThemeProvider,
+} from "./context/ThemeContext";
 import "./index.css";
 
-createRoot(
-  document.getElementById("root")!,
-).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>,
 );

@@ -157,3 +157,11 @@ export async function getDocumentChunkPreviewByLocation(
 
   return response.data;
 }
+
+export async function deleteDocument(
+  documentId: string,
+): Promise<void> {
+  await apiClient.delete(
+    `/documents/${encodeURIComponent(documentId)}`,
+  );
+}

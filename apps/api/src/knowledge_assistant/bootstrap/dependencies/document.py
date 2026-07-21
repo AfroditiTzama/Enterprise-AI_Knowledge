@@ -4,6 +4,9 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from knowledge_assistant.application.documents.commands.delete_document import (
+    DeleteDocumentCommand,
+)
 from knowledge_assistant.application.documents.commands.process_document import (
     ProcessDocumentCommand,
 )
@@ -16,6 +19,7 @@ from knowledge_assistant.application.documents.queries.get_document_chunk_previe
 from knowledge_assistant.application.documents.queries.list_documents import (
     ListDocumentsQuery,
 )
+from knowledge_assistant.core.config import get_settings
 from knowledge_assistant.domain.documents.chunk_repository import (
     DocumentChunkRepository,
 )
@@ -51,7 +55,7 @@ from knowledge_assistant.infrastructure.storage.local_file_storage import (
 from knowledge_assistant.infrastructure.vector_store.chroma_store import (
     ChromaVectorStore,
 )
-from knowledge_assistant.core.config import get_settings
+
 
 def get_document_repository(
     session: Annotated[
@@ -70,14 +74,12 @@ def get_document_chunk_repository(
 ) -> DocumentChunkRepository:
     return SQLAlchemyDocumentChunkRepository(session)
 
+
 @lru_cache
 def get_file_storage() -> FileStorage:
     settings = get_settings()
-
     return LocalFileStorage(
-        storage_directory=(
-            settings.documents_storage_directory
-        ),
+        storage_directory=settings.documents_storage_directory,
     )
 
 
@@ -102,11 +104,8 @@ def get_embedding_service() -> EmbeddingService:
 @lru_cache
 def get_vector_store() -> VectorStore:
     settings = get_settings()
-
     return ChromaVectorStore(
-        storage_directory=(
-            settings.chroma_storage_directory
-        ),
+        storage_directory=settings.chroma_storage_directory,
         collection_name="document_chunks",
     )
 
@@ -123,9 +122,7 @@ def get_document_chunk_preview_query(
 ) -> GetDocumentChunkPreviewQuery:
     return GetDocumentChunkPreviewQuery(
         document_repository=document_repository,
-        document_chunk_repository=(
-            document_chunk_repository
-        ),
+        document_chunk_repository=document_chunk_repository,
     )
 
 
@@ -186,6 +183,27 @@ def get_process_document_command(
     )
 
 
+def get_delete_document_command(
+    document_repository: Annotated[
+        DocumentRepository,
+        Depends(get_document_repository),
+    ],
+    file_storage: Annotated[
+        FileStorage,
+        Depends(get_file_storage),
+    ],
+    vector_store: Annotated[
+        VectorStore,
+        Depends(get_vector_store),
+    ],
+) -> DeleteDocumentCommand:
+    return DeleteDocumentCommand(
+        document_repository=document_repository,
+        file_storage=file_storage,
+        vector_store=vector_store,
+    )
+
+
 def get_list_documents_query(
     document_repository: Annotated[
         DocumentRepository,
@@ -207,11 +225,15 @@ ProcessDocumentCommandDependency = Annotated[
     Depends(get_process_document_command),
 ]
 
+DeleteDocumentCommandDependency = Annotated[
+    DeleteDocumentCommand,
+    Depends(get_delete_document_command),
+]
+
 ListDocumentsQueryDependency = Annotated[
     ListDocumentsQuery,
     Depends(get_list_documents_query),
 ]
-
 
 GetDocumentChunkPreviewQueryDependency = Annotated[
     GetDocumentChunkPreviewQuery,

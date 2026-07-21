@@ -24,3 +24,8 @@ class DocumentRepository(ABC):
     async def list_by_owner_id(self, owner_id: UUID) -> list[Document]:
         """Return all documents owned by a specific user."""
         raise NotImplementedError
+
+    @abstractmethod
+    async def delete(self, document_id: UUID) -> None:
+        """Delete a document and its owned persistence records."""
+        raise NotImplementedError

@@ -47,6 +47,18 @@ class ChromaVectorStore(VectorStore):
             records,
         )
 
+    async def delete_document_records(
+        self,
+        *,
+        owner_id: UUID,
+        document_id: UUID,
+    ) -> None:
+        await asyncio.to_thread(
+            self._delete_document_records_sync,
+            owner_id,
+            document_id,
+        )
+
     async def search(
         self,
         *,
@@ -65,6 +77,20 @@ class ChromaVectorStore(VectorStore):
             owner_id,
             query_embedding,
             limit,
+        )
+
+    def _delete_document_records_sync(
+        self,
+        owner_id: UUID,
+        document_id: UUID,
+    ) -> None:
+        self._collection.delete(
+            where={
+                "$and": [
+                    {"owner_id": str(owner_id)},
+                    {"document_id": str(document_id)},
+                ]
+            }
         )
 
     def _replace_document_records_sync(

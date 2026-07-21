@@ -46,3 +46,13 @@ class VectorStore(ABC):
     ) -> tuple[VectorSearchResult, ...]:
         """Search only inside documents owned by the user."""
         raise NotImplementedError
+
+    @abstractmethod
+    async def delete_document_records(
+        self,
+        *,
+        owner_id: UUID,
+        document_id: UUID,
+    ) -> None:
+        """Delete all vector records belonging to one document."""
+        raise NotImplementedError
