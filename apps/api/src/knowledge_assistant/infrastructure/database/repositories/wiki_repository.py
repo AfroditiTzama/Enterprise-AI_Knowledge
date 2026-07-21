@@ -241,6 +241,396 @@ class SQLAlchemyWikiRepository(WikiRepository):
 
         await self._session.flush()
 
+    async def apply_global_compilation(
+        self,
+        graph: WikiDocumentGraph,
+    ) -> None:
+        self._validate_graph(graph)
+
+        incoming_page_ids = {
+            page.id
+            for page in graph.pages
+        }
+
+        incoming_slugs = {
+            page.slug
+            for page in graph.pages
+        }
+
+        existing_result = await self._session.execute(
+            select(WikiPageModel).where(
+                WikiPageModel.owner_id
+                == graph.owner_id,
+                or_(
+                    WikiPageModel.id.in_(
+                        incoming_page_ids
+                    ),
+                    WikiPageModel.slug.in_(
+                        incoming_slugs
+                    ),
+                ),
+            )
+        )
+
+        existing_models = list(
+            existing_result.scalars().all()
+        )
+
+        existing_by_id = {
+            model.id: model
+            for model in existing_models
+        }
+
+        existing_by_slug = {
+            model.slug: model
+            for model in existing_models
+        }
+
+        revision_slugs = set(incoming_slugs)
+        revision_slugs.update(
+            model.slug
+            for model in existing_models
+        )
+
+        latest_revision_numbers: dict[str, int] = {}
+
+        if revision_slugs:
+            revision_result = await self._session.execute(
+                select(
+                    WikiPageRevisionModel.page_slug,
+                    func.max(
+                        WikiPageRevisionModel.revision_number
+                    ).label("max_revision_number"),
+                )
+                .where(
+                    WikiPageRevisionModel.owner_id
+                    == graph.owner_id,
+                    WikiPageRevisionModel.page_slug.in_(
+                        revision_slugs
+                    ),
+                )
+                .group_by(
+                    WikiPageRevisionModel.page_slug
+                )
+            )
+
+            latest_revision_numbers = {
+                row.page_slug: int(
+                    row.max_revision_number
+                )
+                for row in revision_result.all()
+            }
+
+        revision_models: list[
+            WikiPageRevisionModel
+        ] = []
+
+        new_page_models: list[WikiPageModel] = []
+
+        for page in graph.pages:
+            existing_model = (
+                existing_by_id.get(page.id)
+                or existing_by_slug.get(page.slug)
+            )
+
+            if existing_model is None:
+                new_page_models.append(
+                    WikiMapper.page_to_model(page)
+                )
+
+                latest_number = (
+                    latest_revision_numbers.get(
+                        page.slug,
+                        0,
+                    )
+                )
+
+                operation = (
+                    WikiRevisionOperation.CREATE
+                    if latest_number == 0
+                    else WikiRevisionOperation.UPDATE
+                )
+
+                revision = WikiPageRevision.create(
+                    wiki_page_id=page.id,
+                    owner_id=page.owner_id,
+                    page_slug=page.slug,
+                    revision_number=latest_number + 1,
+                    title=page.title,
+                    summary=page.summary,
+                    content_markdown=(
+                        page.content_markdown
+                    ),
+                    operation=operation,
+                    triggering_document_id=(
+                        graph.document_id
+                    ),
+                )
+
+                revision_models.append(
+                    WikiMapper.revision_to_model(
+                        revision
+                    )
+                )
+
+                latest_revision_numbers[
+                    page.slug
+                ] = latest_number + 1
+
+                continue
+
+            if existing_model.id != page.id:
+                raise ValueError(
+                    "Global Wiki page identity mismatch."
+                )
+
+            previous_slug = existing_model.slug
+
+            if previous_slug != page.slug:
+                target_revision_number = (
+                    latest_revision_numbers.get(
+                        page.slug,
+                        0,
+                    )
+                )
+
+                if target_revision_number > 0:
+                    raise ValueError(
+                        "The global Wiki slug already has "
+                        "an independent revision history."
+                    )
+
+                await self._session.execute(
+                    update(WikiPageRevisionModel)
+                    .where(
+                        WikiPageRevisionModel.owner_id
+                        == graph.owner_id,
+                        WikiPageRevisionModel.page_slug
+                        == previous_slug,
+                    )
+                    .values(
+                        page_slug=page.slug
+                    )
+                )
+
+                latest_revision_numbers[
+                    page.slug
+                ] = latest_revision_numbers.pop(
+                    previous_slug,
+                    0,
+                )
+
+            latest_number = (
+                latest_revision_numbers.get(
+                    page.slug,
+                    0,
+                )
+            )
+
+            if latest_number == 0:
+                baseline_revision = (
+                    WikiPageRevision.create(
+                        wiki_page_id=existing_model.id,
+                        owner_id=existing_model.owner_id,
+                        page_slug=page.slug,
+                        revision_number=1,
+                        title=existing_model.title,
+                        summary=existing_model.summary,
+                        content_markdown=(
+                            existing_model.content_markdown
+                        ),
+                        operation=(
+                            WikiRevisionOperation.CREATE
+                        ),
+                        triggering_document_id=(
+                            existing_model.document_id
+                        ),
+                    )
+                )
+
+                revision_models.append(
+                    WikiMapper.revision_to_model(
+                        baseline_revision
+                    )
+                )
+
+                latest_number = 1
+
+            has_changed = any(
+                (
+                    existing_model.slug != page.slug,
+                    existing_model.title != page.title,
+                    existing_model.summary
+                    != page.summary,
+                    existing_model.content_markdown
+                    != page.content_markdown,
+                    existing_model.document_id
+                    is not None,
+                )
+            )
+
+            existing_model.document_id = None
+            existing_model.slug = page.slug
+            existing_model.title = page.title
+            existing_model.summary = page.summary
+            existing_model.content_markdown = (
+                page.content_markdown
+            )
+            existing_model.updated_at = page.updated_at
+
+            if has_changed:
+                revision = WikiPageRevision.create(
+                    wiki_page_id=existing_model.id,
+                    owner_id=existing_model.owner_id,
+                    page_slug=page.slug,
+                    revision_number=latest_number + 1,
+                    title=page.title,
+                    summary=page.summary,
+                    content_markdown=(
+                        page.content_markdown
+                    ),
+                    operation=WikiRevisionOperation.UPDATE,
+                    triggering_document_id=(
+                        graph.document_id
+                    ),
+                )
+
+                revision_models.append(
+                    WikiMapper.revision_to_model(
+                        revision
+                    )
+                )
+
+                latest_revision_numbers[
+                    page.slug
+                ] = latest_number + 1
+
+        self._session.add_all(new_page_models)
+
+        await self._session.flush()
+
+        obsolete_result = await self._session.execute(
+            select(WikiPageModel.id).where(
+                WikiPageModel.owner_id
+                == graph.owner_id,
+                WikiPageModel.document_id
+                == graph.document_id,
+                ~WikiPageModel.id.in_(
+                    incoming_page_ids
+                ),
+            )
+        )
+
+        obsolete_page_ids = list(
+            obsolete_result.scalars().all()
+        )
+
+        if obsolete_page_ids:
+            await self._session.execute(
+                update(WikiPageRevisionModel)
+                .where(
+                    WikiPageRevisionModel.wiki_page_id.in_(
+                        obsolete_page_ids
+                    )
+                )
+                .values(wiki_page_id=None)
+            )
+
+            await self._session.execute(
+                delete(WikiPageLinkModel).where(
+                    or_(
+                        WikiPageLinkModel.source_page_id.in_(
+                            obsolete_page_ids
+                        ),
+                        WikiPageLinkModel.target_page_id.in_(
+                            obsolete_page_ids
+                        ),
+                    )
+                )
+            )
+
+            await self._session.execute(
+                delete(WikiPageSourceModel).where(
+                    WikiPageSourceModel.wiki_page_id.in_(
+                        obsolete_page_ids
+                    )
+                )
+            )
+
+            await self._session.execute(
+                delete(WikiPageModel).where(
+                    WikiPageModel.id.in_(
+                        obsolete_page_ids
+                    )
+                )
+            )
+
+        document_chunk_result = await self._session.execute(
+            select(DocumentChunkModel.id).where(
+                DocumentChunkModel.document_id
+                == graph.document_id
+            )
+        )
+
+        document_chunk_ids = list(
+            document_chunk_result.scalars().all()
+        )
+
+        if document_chunk_ids and incoming_page_ids:
+            await self._session.execute(
+                delete(WikiPageSourceModel).where(
+                    WikiPageSourceModel.wiki_page_id.in_(
+                        incoming_page_ids
+                    ),
+                    WikiPageSourceModel.chunk_id.in_(
+                        document_chunk_ids
+                    ),
+                )
+            )
+
+        source_models = [
+            WikiMapper.source_to_model(source)
+            for source in graph.sources
+        ]
+
+        existing_link_result = await self._session.execute(
+            select(
+                WikiPageLinkModel.source_page_id,
+                WikiPageLinkModel.target_page_id,
+                WikiPageLinkModel.label,
+            ).where(
+                WikiPageLinkModel.source_page_id.in_(
+                    incoming_page_ids
+                )
+            )
+        )
+
+        existing_link_keys = {
+            (
+                row.source_page_id,
+                row.target_page_id,
+                row.label,
+            )
+            for row in existing_link_result.all()
+        }
+
+        link_models = [
+            WikiMapper.link_to_model(link)
+            for link in graph.links
+            if (
+                link.source_page_id,
+                link.target_page_id,
+                link.label,
+            )
+            not in existing_link_keys
+        ]
+
+        self._session.add_all(revision_models)
+        self._session.add_all(source_models)
+        self._session.add_all(link_models)
+
+        await self._session.flush()
+
     async def list_by_owner_id(
         self,
         owner_id: UUID,
@@ -541,7 +931,10 @@ class SQLAlchemyWikiRepository(WikiRepository):
                     "Wiki page owner does not match graph owner."
                 )
 
-            if page.document_id != graph.document_id:
+            if page.document_id not in {
+                None,
+                graph.document_id,
+            }:
                 raise ValueError(
                     "Wiki page document does not match graph document."
                 )

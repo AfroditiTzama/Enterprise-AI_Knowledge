@@ -19,6 +19,14 @@ class WikiRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    async def apply_global_compilation(
+        self,
+        graph: WikiDocumentGraph,
+    ) -> None:
+        """Create or update owner-scoped global Wiki pages."""
+        raise NotImplementedError
+
+    @abstractmethod
     async def list_by_owner_id(
         self,
         owner_id: UUID,

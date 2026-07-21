@@ -13,7 +13,7 @@ class AskKnowledgeRequest(BaseModel):
 class KnowledgeSourceResponse(BaseModel):
     source_id: str
     source_type: str
-    document_id: UUID
+    document_id: UUID | None
     title: str
     score: float
     slug: str | None = None

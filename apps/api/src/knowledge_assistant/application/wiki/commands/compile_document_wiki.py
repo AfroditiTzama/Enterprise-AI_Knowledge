@@ -72,24 +72,77 @@ class CompileDocumentWikiCommand:
             chunks=tuple(chunks),
         )
 
+        existing_pages = (
+            await self._wiki_repository.list_by_owner_id(
+                owner_id
+            )
+        )
+
+        existing_pages_by_slug = {
+            page.slug: page
+            for page in existing_pages
+        }
+
+        legacy_prefix = f"{document.id.hex[:8]}-"
+
+        legacy_pages_by_global_slug = {
+            page.slug[len(legacy_prefix):]: page
+            for page in existing_pages
+            if (
+                page.document_id == document.id
+                and page.slug.startswith(legacy_prefix)
+            )
+        }
+
         pages_by_draft_slug: dict[str, WikiPage] = {}
+        generated_global_slugs: set[str] = set()
 
         for draft in compilation.pages:
             draft_slug = draft.slug.strip().lower()
 
-            canonical_slug = self._create_canonical_slug(
-                document_id=document.id,
+            global_slug = self._create_global_slug(
                 draft_slug=draft_slug,
             )
 
-            pages_by_draft_slug[draft_slug] = WikiPage.create(
-                owner_id=owner_id,
-                document_id=document.id,
-                slug=canonical_slug,
-                title=draft.title,
-                summary=draft.summary,
-                content_markdown=draft.content_markdown,
+            if global_slug in generated_global_slugs:
+                raise ValueError(
+                    "Wiki compilation produced duplicate "
+                    "global page slugs."
+                )
+
+            generated_global_slugs.add(global_slug)
+
+            existing_page = (
+                existing_pages_by_slug.get(global_slug)
+                or legacy_pages_by_global_slug.get(
+                    global_slug
+                )
             )
+
+            if existing_page is None:
+                wiki_page = WikiPage.create(
+                    owner_id=owner_id,
+                    document_id=None,
+                    slug=global_slug,
+                    title=draft.title,
+                    summary=draft.summary,
+                    content_markdown=(
+                        draft.content_markdown
+                    ),
+                )
+            else:
+                wiki_page = (
+                    existing_page.update_from_compilation(
+                        slug=global_slug,
+                        title=draft.title,
+                        summary=draft.summary,
+                        content_markdown=(
+                            draft.content_markdown
+                        ),
+                    )
+                )
+
+            pages_by_draft_slug[draft_slug] = wiki_page
 
         chunks_by_id = {
             chunk.id: chunk
@@ -122,7 +175,7 @@ class CompileDocumentWikiCommand:
                 )
 
         links: list[WikiPageLink] = []
-        existing_relationships: set[
+        relationship_keys: set[
             tuple[UUID, UUID]
         ] = set()
 
@@ -147,12 +200,10 @@ class CompileDocumentWikiCommand:
                     target_page.id,
                 )
 
-                if relationship_key in existing_relationships:
+                if relationship_key in relationship_keys:
                     continue
 
-                existing_relationships.add(
-                    relationship_key
-                )
+                relationship_keys.add(relationship_key)
 
                 links.append(
                     WikiPageLink.create(
@@ -172,16 +223,15 @@ class CompileDocumentWikiCommand:
             links=tuple(links),
         )
 
-        await self._wiki_repository.replace_for_document(
+        await self._wiki_repository.apply_global_compilation(
             graph
         )
 
         return graph
 
     @staticmethod
-    def _create_canonical_slug(
+    def _create_global_slug(
         *,
-        document_id: UUID,
         draft_slug: str,
     ) -> str:
         cleaned_slug = re.sub(
@@ -191,8 +241,6 @@ class CompileDocumentWikiCommand:
         ).strip("-")
 
         if not cleaned_slug:
-            cleaned_slug = "wiki-page"
+            return "wiki-page"
 
-        return (
-            f"{document_id.hex[:8]}-{cleaned_slug}"
-        )
+        return cleaned_slug

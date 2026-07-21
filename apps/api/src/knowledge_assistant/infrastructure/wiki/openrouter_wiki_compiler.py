@@ -98,7 +98,8 @@ class OpenRouterWikiCompiler(WikiCompiler):
 
         response_payload = {
             "model": self._model,
-            "temperature": 0.1,
+            "temperature": 0.0,
+            "max_tokens": 16000,
             "messages": [
                 {
                     "role": "system",
@@ -157,27 +158,65 @@ class OpenRouterWikiCompiler(WikiCompiler):
 
         response_data = response.json()
 
+        try:
+            finish_reason = response_data[
+                "choices"
+            ][0].get("finish_reason")
+        except (
+            KeyError,
+            IndexError,
+            TypeError,
+        ):
+            finish_reason = None
+
+        if finish_reason == "length":
+            raise RuntimeError(
+                "The LLM response was truncated because "
+                "the output token limit was reached."
+            )
+
         raw_content = self._extract_content(
             response_data
         )
 
-        try:
-            parsed_json = json.loads(
+        normalized_content = (
+            self._normalize_json_content(
                 raw_content
             )
+        )
 
+        try:
+            parsed_json = json.loads(
+                normalized_content
+            )
+
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                "The LLM returned invalid JSON at "
+                f"line {error.lineno}, column {error.colno}. "
+                f"Completion status: "
+                f"{finish_reason or 'unknown'}."
+            ) from error
+
+        try:
             parsed_payload = (
                 WikiCompilationPayload.model_validate(
                     parsed_json
                 )
             )
 
-        except (
-            json.JSONDecodeError,
-            ValidationError,
-        ) as error:
+        except ValidationError as error:
+            validation_issues = "; ".join(
+                (
+                    f"{'.'.join(str(part) for part in issue['loc'])}: "
+                    f"{issue['msg']}"
+                )
+                for issue in error.errors()[:5]
+            )
+
             raise ValueError(
-                "The LLM returned an invalid wiki structure."
+                "The LLM returned an invalid wiki structure: "
+                f"{validation_issues}"
             ) from error
 
         return self._to_domain(
@@ -304,6 +343,39 @@ Rules:
     or Repository are available without a URL, preserve them as plain
     text and do not invent a link target.
 """.strip()
+
+    @staticmethod
+    def _normalize_json_content(
+        content: str,
+    ) -> str:
+        normalized = content.strip()
+
+        if normalized.startswith("```"):
+            lines = normalized.splitlines()
+
+            if lines and lines[0].strip().lower() in {
+                "```",
+                "```json",
+            }:
+                lines = lines[1:]
+
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+
+            normalized = "\n".join(lines).strip()
+
+        object_start = normalized.find("{")
+        object_end = normalized.rfind("}")
+
+        if (
+            object_start >= 0
+            and object_end > object_start
+        ):
+            normalized = normalized[
+                object_start:object_end + 1
+            ]
+
+        return normalized
 
     @staticmethod
     def _extract_content(

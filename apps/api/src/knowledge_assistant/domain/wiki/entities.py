@@ -54,6 +54,45 @@ class WikiPage:
             updated_at=now,
         )
 
+    def update_from_compilation(
+        self,
+        *,
+        slug: str,
+        title: str,
+        summary: str,
+        content_markdown: str,
+    ) -> "WikiPage":
+        cleaned_slug = slug.strip().lower()
+        cleaned_title = title.strip()
+        cleaned_content = content_markdown.strip()
+
+        if not cleaned_slug:
+            raise ValueError(
+                "Wiki page slug cannot be empty."
+            )
+
+        if not cleaned_title:
+            raise ValueError(
+                "Wiki page title cannot be empty."
+            )
+
+        if not cleaned_content:
+            raise ValueError(
+                "Wiki page content cannot be empty."
+            )
+
+        return WikiPage(
+            id=self.id,
+            owner_id=self.owner_id,
+            document_id=None,
+            slug=cleaned_slug,
+            title=cleaned_title,
+            summary=summary.strip(),
+            content_markdown=cleaned_content,
+            created_at=self.created_at,
+            updated_at=datetime.now(timezone.utc),
+        )
+
 
 @dataclass(frozen=True)
 class WikiPageSource:
