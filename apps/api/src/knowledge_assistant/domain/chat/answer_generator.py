@@ -13,6 +13,8 @@ class KnowledgeAnswerGenerator(ABC):
         *,
         question: str,
         sources: tuple[RetrievedKnowledgeSource, ...],
+        assistant_behavior: str = "balanced",
+        preferred_language: str = "en",
     ) -> GeneratedKnowledgeAnswer:
         """Generate a grounded answer using retrieved sources."""
         raise NotImplementedError

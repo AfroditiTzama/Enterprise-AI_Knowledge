@@ -8,6 +8,12 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from knowledge_assistant.core.config import get_settings
 from knowledge_assistant.infrastructure.database.base import Base
 from knowledge_assistant.infrastructure.database.models.user import UserModel  # noqa: F401
+from knowledge_assistant.infrastructure.database.models.auth import (  # noqa: F401
+    AccountActionTokenModel,
+    AuthSessionModel,
+    LoginSecurityStateModel,
+    SecurityEventModel,
+)
 from knowledge_assistant.infrastructure.database.models.document import (
     DocumentModel,
 )

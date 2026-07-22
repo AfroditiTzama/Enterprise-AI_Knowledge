@@ -11,6 +11,7 @@ import {
   type FormEvent,
 } from "react";
 import {
+  Link,
   useNavigate,
 } from "react-router-dom";
 
@@ -68,12 +69,13 @@ export default function AuthPage() {
       }
 
       const result = await login({ email, password });
-      signIn(result.access_token);
+      signIn(result);
       navigate("/dashboard", { replace: true });
     } catch (requestError) {
       setError(
         getApiErrorMessage(requestError, {
           401: "Incorrect email or password.",
+          429: "Too many sign-in attempts. Please wait and try again.",
           409: "An account with this email already exists.",
           422: "Please check the information you entered.",
         }),
@@ -206,17 +208,25 @@ export default function AuthPage() {
                   onChange={(event) =>
                     setPassword(event.target.value)
                   }
-                  placeholder="At least 8 characters"
+                  placeholder="At least 10 characters"
                   autoComplete={
                     mode === "login"
                       ? "current-password"
                       : "new-password"
                   }
-                  minLength={8}
+                  minLength={mode === "register" ? 10 : 1}
                   required
                 />
               </div>
             </label>
+
+            {mode === "login" && (
+              <div className="auth-form-help">
+                <Link to="/forgot-password">
+                  Forgot your password?
+                </Link>
+              </div>
+            )}
 
             {error && (
               <FeedbackBanner kind="error" message={error} />

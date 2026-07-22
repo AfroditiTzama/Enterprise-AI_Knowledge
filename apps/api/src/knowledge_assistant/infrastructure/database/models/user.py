@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from knowledge_assistant.infrastructure.database.base import Base
@@ -44,4 +46,37 @@ class UserModel(
         nullable=False,
         default=False,
         server_default="false",
+    )
+
+    auth_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+    )
+
+    preferred_language: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="en",
+        server_default="en",
+    )
+
+    theme_preference: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="system",
+        server_default="system",
+    )
+
+    assistant_behavior: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="balanced",
+        server_default="balanced",
+    )
+
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
     )

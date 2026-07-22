@@ -22,5 +22,9 @@ class AuthorizationError(DomainError):
     """Raised when authorization fails."""
 
 
+class RateLimitError(AuthenticationError):
+    """Raised when a security or usage limit is exceeded."""
+
+
 class BusinessRuleViolation(DomainError):
     """Raised when a business rule is violated."""

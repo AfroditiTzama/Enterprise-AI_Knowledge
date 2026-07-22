@@ -14,16 +14,35 @@ import {
 import AssistantPage from "./pages/AssistantPage";
 import AuthPage from "./pages/AuthPage";
 import DocumentsPage from "./pages/DocumentsPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ProfilePage from "./pages/ProfilePage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import WikiGraphPage from "./pages/WikiGraphPage";
 import WikiPage from "./pages/WikiPage";
+
+function AuthLoadingScreen() {
+  return (
+    <main className="auth-loading-screen" aria-label="Checking session">
+      <div className="app-loader" />
+      <p>Securing your workspace...</p>
+    </main>
+  );
+}
 
 function ProtectedRoute({
   children,
 }: {
   children: ReactNode;
 }) {
-  const { isAuthenticated } = useAuth();
+  const {
+    isAuthenticated,
+    isAuthLoading,
+  } = useAuth();
+
+  if (isAuthLoading) {
+    return <AuthLoadingScreen />;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -33,20 +52,29 @@ function ProtectedRoute({
 }
 
 export default function App() {
-  const { isAuthenticated } = useAuth();
+  const {
+    isAuthenticated,
+    isAuthLoading,
+  } = useAuth();
 
   return (
     <Routes>
       <Route
         path="/"
         element={
-          isAuthenticated ? (
+          isAuthLoading ? (
+            <AuthLoadingScreen />
+          ) : isAuthenticated ? (
             <Navigate to="/dashboard" replace />
           ) : (
             <AuthPage />
           )
         }
       />
+
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
 
       <Route
         element={

@@ -107,7 +107,7 @@ export default function AppShell() {
 
   function handleLogout() {
     setIsSidebarOpen(false);
-    signOut();
+    void signOut();
   }
 
   const ThemeIcon =
