@@ -33,6 +33,8 @@ async def ask_knowledge_assistant(
         result = await query.execute(
             owner_id=current_user.id,
             question=request.question,
+            assistant_behavior=current_user.assistant_behavior,
+            preferred_language=current_user.preferred_language,
         )
     except ValueError as error:
         raise HTTPException(

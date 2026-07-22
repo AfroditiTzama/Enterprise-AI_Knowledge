@@ -56,6 +56,8 @@ class AskKnowledgeQuery:
         *,
         owner_id: UUID,
         question: str,
+        assistant_behavior: str = "balanced",
+        preferred_language: str = "en",
     ) -> KnowledgeChatResult:
         cleaned_question = question.strip()
 
@@ -173,6 +175,8 @@ class AskKnowledgeQuery:
             await self._answer_generator.generate(
                 question=cleaned_question,
                 sources=tuple(sources),
+                assistant_behavior=assistant_behavior,
+                preferred_language=preferred_language,
             )
         )
 

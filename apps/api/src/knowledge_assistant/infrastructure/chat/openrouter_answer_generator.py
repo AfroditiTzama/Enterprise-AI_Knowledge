@@ -65,6 +65,8 @@ class OpenRouterKnowledgeAnswerGenerator(
         *,
         question: str,
         sources: tuple[RetrievedKnowledgeSource, ...],
+        assistant_behavior: str = "balanced",
+        preferred_language: str = "en",
     ) -> GeneratedKnowledgeAnswer:
         cleaned_question = question.strip()
 
@@ -84,7 +86,10 @@ class OpenRouterKnowledgeAnswerGenerator(
             "messages": [
                 {
                     "role": "system",
-                    "content": self._system_prompt(),
+                    "content": self._system_prompt(
+                        assistant_behavior=assistant_behavior,
+                        preferred_language=preferred_language,
+                    ),
                 },
                 {
                     "role": "user",
@@ -171,9 +176,32 @@ class OpenRouterKnowledgeAnswerGenerator(
         )
 
     @staticmethod
-    def _system_prompt() -> str:
-        return """
+    def _system_prompt(
+        *,
+        assistant_behavior: str,
+        preferred_language: str,
+    ) -> str:
+        style_instruction = {
+            "concise": (
+                "Keep the answer concise and direct. Prefer short paragraphs "
+                "and only the most relevant details."
+            ),
+            "detailed": (
+                "Provide a detailed, structured answer with useful context, "
+                "while remaining grounded in the supplied sources."
+            ),
+        }.get(
+            assistant_behavior,
+            "Provide a balanced answer with enough detail to be useful.",
+        )
+        language_name = "Greek" if preferred_language == "el" else "English"
+
+        return f"""
 You are an enterprise knowledge assistant.
+
+User preference:
+- Default response language: {language_name}.
+- Response style: {style_instruction}
 
 Answer the user's question using only the supplied knowledge sources.
 
