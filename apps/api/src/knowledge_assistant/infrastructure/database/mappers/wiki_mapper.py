@@ -1,11 +1,23 @@
+import json
+from uuid import UUID
+
 from knowledge_assistant.domain.wiki.entities import (
+    WikiClaimCitation,
+    WikiConflictStatus,
+    WikiMaintenanceIssueType,
+    WikiMaintenanceStatus,
+    WikiMaintenanceSuggestion,
     WikiPage,
+    WikiPageConflict,
     WikiPageLink,
     WikiPageRevision,
     WikiPageSource,
     WikiRevisionOperation,
 )
 from knowledge_assistant.infrastructure.database.models.wiki import (
+    WikiClaimCitationModel,
+    WikiMaintenanceSuggestionModel,
+    WikiPageConflictModel,
     WikiPageLinkModel,
     WikiPageModel,
     WikiPageRevisionModel,
@@ -105,3 +117,77 @@ class WikiMapper:
             ),
             created_at=model.created_at,
         )
+
+    @staticmethod
+    def conflict_to_model(
+        conflict: WikiPageConflict,
+    ) -> WikiPageConflictModel:
+        return WikiPageConflictModel(
+            id=conflict.id,
+            owner_id=conflict.owner_id,
+            wiki_page_id=conflict.wiki_page_id,
+            source_document_id=conflict.source_document_id,
+            existing_statement=conflict.existing_statement,
+            incoming_statement=conflict.incoming_statement,
+            explanation=conflict.explanation,
+            status=conflict.status.value,
+            resolution_note=conflict.resolution_note,
+            created_at=conflict.created_at,
+            resolved_at=conflict.resolved_at,
+        )
+
+    @staticmethod
+    def conflict_to_domain(
+        model: WikiPageConflictModel,
+    ) -> WikiPageConflict:
+        return WikiPageConflict(
+            id=model.id,
+            owner_id=model.owner_id,
+            wiki_page_id=model.wiki_page_id,
+            source_document_id=model.source_document_id,
+            existing_statement=model.existing_statement,
+            incoming_statement=model.incoming_statement,
+            explanation=model.explanation,
+            status=WikiConflictStatus(model.status),
+            resolution_note=model.resolution_note,
+            created_at=model.created_at,
+            resolved_at=model.resolved_at,
+        )
+
+    @staticmethod
+    def claim_citation_to_model(
+        citation: WikiClaimCitation,
+    ) -> WikiClaimCitationModel:
+        return WikiClaimCitationModel(
+            id=citation.id,
+            owner_id=citation.owner_id,
+            wiki_page_id=citation.wiki_page_id,
+            chunk_id=citation.chunk_id,
+            claim_key=citation.claim_key,
+            claim_text=citation.claim_text,
+            position=citation.position,
+            created_at=citation.created_at,
+        )
+
+    @staticmethod
+    def maintenance_to_domain(
+        model: WikiMaintenanceSuggestionModel,
+    ) -> WikiMaintenanceSuggestion:
+        return WikiMaintenanceSuggestion(
+            id=model.id,
+            owner_id=model.owner_id,
+            issue_type=WikiMaintenanceIssueType(model.issue_type),
+            status=WikiMaintenanceStatus(model.status),
+            fingerprint=model.fingerprint,
+            title=model.title,
+            description=model.description,
+            page_ids=tuple(
+                UUID(value)
+                for value in json.loads(model.page_ids_json)
+            ),
+            metadata=dict(json.loads(model.metadata_json)),
+            confidence=float(model.confidence),
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+        )
+

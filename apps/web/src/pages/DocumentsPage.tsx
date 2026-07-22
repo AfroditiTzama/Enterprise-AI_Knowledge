@@ -4,19 +4,19 @@ import {
   FileText,
   LoaderCircle,
   RefreshCw,
+  RotateCcw,
   Trash2,
   Upload,
 } from "lucide-react";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ChangeEvent,
 } from "react";
-import {
-  useNavigate,
-} from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 import {
   deleteDocument,
@@ -25,15 +25,15 @@ import {
   uploadDocument,
   type DocumentItem,
 } from "../api/documents";
+import { getApiErrorMessage } from "../api/errors";
 import {
-  getApiErrorMessage,
-} from "../api/errors";
-import {
-  withApiRetry,
-} from "../api/retry";
-import {
-  compileDocumentWiki,
-} from "../api/wiki";
+  listProcessingJobs,
+  retryProcessingJob,
+  type ProcessingJob,
+  type ProcessingJobStage,
+} from "../api/jobs";
+import { withApiRetry } from "../api/retry";
+import { compileDocumentWiki } from "../api/wiki";
 import ConfirmDialog from "../components/ConfirmDialog";
 import FeedbackBanner from "../components/FeedbackBanner";
 import StatusBadge from "../components/StatusBadge";
@@ -59,20 +59,41 @@ function formatDate(value: string): string {
   }).format(new Date(value));
 }
 
-type DocumentAction =
-  | "process"
-  | "compile"
-  | "delete";
+const stageLabels: Record<ProcessingJobStage, string> = {
+  QUEUED: "Waiting in queue",
+  EXTRACTING: "Extracting text",
+  CHUNKING: "Creating chunks",
+  EMBEDDING: "Generating embeddings",
+  PERSISTING: "Saving knowledge",
+  COMPLETED: "Processing complete",
+};
+
+type DocumentAction = "process" | "compile" | "delete" | "retry";
 
 interface ActiveAction {
   documentId: string;
   action: DocumentAction;
 }
 
+function latestJobsByDocument(
+  jobs: ProcessingJob[],
+): Record<string, ProcessingJob> {
+  const result: Record<string, ProcessingJob> = {};
+
+  for (const job of jobs) {
+    if (!result[job.document_id]) {
+      result[job.document_id] = job;
+    }
+  }
+
+  return result;
+}
+
 export default function DocumentsPage() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [jobs, setJobs] = useState<ProcessingJob[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRetrying, setIsRetrying] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -83,28 +104,67 @@ export default function DocumentsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const loadDocuments = useCallback(async () => {
-    setError("");
-    setIsLoading(true);
-    setIsRetrying(false);
+  const jobsByDocument = useMemo(
+    () => latestJobsByDocument(jobs),
+    [jobs],
+  );
 
-    try {
-      const items = await withApiRetry(listDocuments, {
-        retries: 2,
-        onRetry: () => setIsRetrying(true),
-      });
-      setDocuments(items);
-    } catch (requestError) {
-      setError(getApiErrorMessage(requestError));
-    } finally {
-      setIsLoading(false);
-      setIsRetrying(false);
-    }
-  }, []);
+  const hasActiveJobs = jobs.some(
+    (job) => job.status === "QUEUED" || job.status === "RUNNING",
+  );
+
+  const loadWorkspace = useCallback(
+    async ({ showLoading = true }: { showLoading?: boolean } = {}) => {
+      setError("");
+      if (showLoading) {
+        setIsLoading(true);
+        setIsRetrying(false);
+      }
+
+      try {
+        const [documentItems, processingJobs] = await withApiRetry(
+          async () => Promise.all([
+            listDocuments(),
+            listProcessingJobs(),
+          ]),
+          {
+            retries: 2,
+            onRetry: () => {
+              if (showLoading) {
+                setIsRetrying(true);
+              }
+            },
+          },
+        );
+        setDocuments(documentItems);
+        setJobs(processingJobs);
+      } catch (requestError) {
+        setError(getApiErrorMessage(requestError));
+      } finally {
+        if (showLoading) {
+          setIsLoading(false);
+          setIsRetrying(false);
+        }
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    void loadDocuments();
-  }, [loadDocuments]);
+    void loadWorkspace();
+  }, [loadWorkspace]);
+
+  useEffect(() => {
+    if (!hasActiveJobs) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadWorkspace({ showLoading: false });
+    }, 1500);
+
+    return () => window.clearInterval(intervalId);
+  }, [hasActiveJobs, loadWorkspace]);
 
   async function handleFileChange(
     event: ChangeEvent<HTMLInputElement>,
@@ -122,7 +182,7 @@ export default function DocumentsPage() {
     try {
       await uploadDocument(file);
       setNotice(`${file.name} uploaded successfully.`);
-      await loadDocuments();
+      await loadWorkspace({ showLoading: false });
     } catch (requestError) {
       setError(getApiErrorMessage(requestError));
     } finally {
@@ -138,10 +198,36 @@ export default function DocumentsPage() {
 
     try {
       const result = await processDocument(documentId);
+      setJobs((current) => [
+        result.job,
+        ...current.filter((job) => job.id !== result.job.id),
+      ]);
       setNotice(
-        `Processing completed: ${result.chunks_count} chunks created.`,
+        result.created
+          ? "Document processing was added to the local queue."
+          : "This document is already being processed.",
       );
-      await loadDocuments();
+      await loadWorkspace({ showLoading: false });
+    } catch (requestError) {
+      setError(getApiErrorMessage(requestError));
+    } finally {
+      setActiveAction(null);
+    }
+  }
+
+  async function handleRetry(job: ProcessingJob) {
+    setError("");
+    setNotice("");
+    setActiveAction({ documentId: job.document_id, action: "retry" });
+
+    try {
+      const updatedJob = await retryProcessingJob(job.id);
+      setJobs((current) => [
+        updatedJob,
+        ...current.filter((item) => item.id !== updatedJob.id),
+      ]);
+      setNotice("Processing was queued again.");
+      await loadWorkspace({ showLoading: false });
     } catch (requestError) {
       setError(getApiErrorMessage(requestError));
     } finally {
@@ -173,15 +259,15 @@ export default function DocumentsPage() {
     const document = documentToDelete;
     setError("");
     setNotice("");
-    setActiveAction({
-      documentId: document.id,
-      action: "delete",
-    });
+    setActiveAction({ documentId: document.id, action: "delete" });
 
     try {
       await deleteDocument(document.id);
       setDocuments((current) =>
         current.filter((item) => item.id !== document.id),
+      );
+      setJobs((current) =>
+        current.filter((job) => job.document_id !== document.id),
       );
       setNotice(`${document.original_filename} was deleted.`);
       setDocumentToDelete(null);
@@ -201,8 +287,8 @@ export default function DocumentsPage() {
           <p className="eyebrow">Knowledge workspace</p>
           <h1>Your documents</h1>
           <p>
-            Upload, process and transform files into connected,
-            searchable knowledge.
+            Upload files and let the local worker process them safely in
+            the background.
           </p>
         </div>
 
@@ -210,7 +296,7 @@ export default function DocumentsPage() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => void loadDocuments()}
+            onClick={() => void loadWorkspace()}
             disabled={isLoading}
           >
             <RefreshCw size={17} />
@@ -254,13 +340,11 @@ export default function DocumentsPage() {
         <FeedbackBanner
           kind="error"
           message={error}
-          onRetry={() => void loadDocuments()}
+          onRetry={() => void loadWorkspace()}
         />
       )}
 
-      {notice && (
-        <FeedbackBanner kind="success" message={notice} />
-      )}
+      {notice && <FeedbackBanner kind="success" message={notice} />}
 
       {isLoading && !isRetrying ? (
         <div className="document-grid" aria-label="Loading documents">
@@ -275,8 +359,8 @@ export default function DocumentsPage() {
           </div>
           <h2>Start with your first document</h2>
           <p>
-            Upload a PDF, DOCX or TXT file. You can process it,
-            build Wiki pages and then ask questions in the Assistant.
+            Upload a PDF, DOCX or TXT file. Processing continues in the
+            background even while you browse another page.
           </p>
           <button
             type="button"
@@ -294,7 +378,10 @@ export default function DocumentsPage() {
               activeAction?.documentId === document.id
                 ? activeAction.action
                 : null;
-            const isBusy = action !== null;
+            const job = jobsByDocument[document.id];
+            const isJobActive =
+              job?.status === "QUEUED" || job?.status === "RUNNING";
+            const isBusy = action !== null || isJobActive;
 
             return (
               <article className="document-card" key={document.id}>
@@ -315,12 +402,53 @@ export default function DocumentsPage() {
                   </div>
                 </div>
 
+                {job && (job.status === "QUEUED" || job.status === "RUNNING") && (
+                  <div className="processing-progress" aria-live="polite">
+                    <div className="processing-progress-header">
+                      <span>{stageLabels[job.stage]}</span>
+                      <strong>{job.progress}%</strong>
+                    </div>
+                    <div
+                      className="processing-progress-track"
+                      role="progressbar"
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={job.progress}
+                    >
+                      <span style={{ width: `${job.progress}%` }} />
+                    </div>
+                    <small>
+                      Attempt {job.attempts || 1} of {job.max_attempts}
+                    </small>
+                  </div>
+                )}
+
+                {job?.status === "FAILED" && (
+                  <div className="processing-failure">
+                    <strong>Processing failed</strong>
+                    <p>{job.error_message || "The document could not be processed."}</p>
+                    <button
+                      type="button"
+                      className="secondary-button compact"
+                      disabled={action === "retry" || job.attempts >= job.max_attempts}
+                      onClick={() => void handleRetry(job)}
+                    >
+                      {action === "retry" ? (
+                        <LoaderCircle className="spin" size={16} />
+                      ) : (
+                        <RotateCcw size={16} />
+                      )}
+                      Retry processing
+                    </button>
+                  </div>
+                )}
+
                 <div className="document-actions">
-                  {document.status !== "PROCESSED" && (
+                  {document.status !== "PROCESSED" && !isJobActive && (
                     <button
                       type="button"
                       className="secondary-button"
-                      disabled={isBusy}
+                      disabled={isBusy || job?.status === "FAILED"}
                       onClick={() => void handleProcess(document.id)}
                     >
                       {action === "process" ? (
@@ -354,7 +482,11 @@ export default function DocumentsPage() {
                     disabled={isBusy}
                     onClick={() => setDocumentToDelete(document)}
                     aria-label={`Delete ${document.original_filename}`}
-                    title="Delete document"
+                    title={
+                      isJobActive
+                        ? "Wait for processing to finish before deleting"
+                        : "Delete document"
+                    }
                   >
                     {action === "delete" ? (
                       <LoaderCircle className="spin" size={17} />
@@ -374,7 +506,7 @@ export default function DocumentsPage() {
         title="Delete this document?"
         description={
           documentToDelete
-            ? `${documentToDelete.original_filename} and its extracted chunks and embeddings will be permanently removed. Wiki pages built from shared knowledge may remain.`
+            ? `${documentToDelete.original_filename} and its extracted chunks, embeddings and processing history will be permanently removed. Wiki pages built from shared knowledge may remain.`
             : ""
         }
         confirmLabel="Delete document"

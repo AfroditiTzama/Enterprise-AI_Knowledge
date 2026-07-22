@@ -1,22 +1,42 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from knowledge_assistant.core.config import get_settings
 from knowledge_assistant.domain.common.exceptions import (
     AuthenticationError,
     AuthorizationError,
 )
-from knowledge_assistant.presentation.api.v1.router import (
-    api_v1_router,
+from knowledge_assistant.infrastructure.database.session import (
+    AsyncSessionFactory,
 )
+from knowledge_assistant.infrastructure.jobs.local_processing_worker import (
+    LocalProcessingWorker,
+)
+from knowledge_assistant.presentation.api.v1.router import api_v1_router
 
 
 settings = get_settings()
+worker = LocalProcessingWorker()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    del app
+    await worker.start()
+    try:
+        yield
+    finally:
+        await worker.stop()
+
 
 app = FastAPI(
     title=settings.app_name,
     debug=settings.app_debug,
+    lifespan=lifespan,
 )
 
 
@@ -26,15 +46,10 @@ async def handle_authentication_error(
     error: AuthenticationError,
 ) -> JSONResponse:
     del request
-
     return JSONResponse(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        content={
-            "detail": str(error),
-        },
-        headers={
-            "WWW-Authenticate": "Bearer",
-        },
+        content={"detail": str(error)},
+        headers={"WWW-Authenticate": "Bearer"},
     )
 
 
@@ -44,12 +59,9 @@ async def handle_authorization_error(
     error: AuthorizationError,
 ) -> JSONResponse:
     del request
-
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
-        content={
-            "detail": str(error),
-        },
+        content={"detail": str(error)},
     )
 
 
@@ -60,5 +72,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+async def root() -> dict[str, str]:
+    return {
+        "name": settings.app_name,
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health",
+    }
+
+
+@app.get("/health")
+async def health() -> dict[str, object]:
+    async with AsyncSessionFactory() as session:
+        await session.execute(text("SELECT 1"))
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "worker": "running" if worker.is_running else "stopped",
+    }
+
 
 app.include_router(api_v1_router)

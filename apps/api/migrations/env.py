@@ -14,7 +14,13 @@ from knowledge_assistant.infrastructure.database.models.document import (
 from knowledge_assistant.infrastructure.database.models.document_chunk import (
     DocumentChunkModel,
 )
+from knowledge_assistant.infrastructure.database.models.processing_job import (
+    ProcessingJobModel,
+)
 from knowledge_assistant.infrastructure.database.models.wiki import (
+    WikiClaimCitationModel,
+    WikiMaintenanceSuggestionModel,
+    WikiPageConflictModel,
     WikiPageLinkModel,
     WikiPageModel,
     WikiPageRevisionModel,

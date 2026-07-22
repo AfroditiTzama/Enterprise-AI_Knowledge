@@ -870,6 +870,7 @@ p {
   color: var(--accent-text);
 }
 
+.status-queued,
 .status-processing {
   background: var(--warning-soft);
   color: var(--warning);
@@ -2229,4 +2230,571 @@ p {
   .confirm-dialog footer button {
     width: 100%;
   }
+}
+
+/* LLM-maintained Wiki review */
+.wiki-conflict-section {
+  margin: 16px 0;
+  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--warning) 38%, var(--border));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--warning-soft) 55%, var(--surface));
+}
+
+.wiki-conflict-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.wiki-conflict-list article {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+}
+
+.wiki-conflict-list article > header,
+.wiki-conflict-list article > footer {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.wiki-conflict-list article > header {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.wiki-conflict-list article > footer {
+  justify-content: flex-end;
+  margin-top: 13px;
+}
+
+.conflict-status {
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.conflict-status.open {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.conflict-status.resolved {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.conflict-status.dismissed {
+  background: var(--surface-muted);
+  color: var(--muted);
+}
+
+.conflict-statements {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.conflict-statements > div {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-muted);
+}
+
+.conflict-statements small {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.conflict-statements p,
+.conflict-explanation {
+  margin: 7px 0 0;
+  color: var(--text-strong);
+  line-height: 1.55;
+}
+
+.conflict-explanation {
+  color: var(--muted-strong);
+  font-size: 0.84rem;
+}
+
+.revision-action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.revision-action-button:hover {
+  text-decoration: underline;
+}
+
+.revision-diff-drawer {
+  width: min(100%, 760px);
+}
+
+.revision-diff-content {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+.revision-diff-line {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  padding: 7px 11px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-strong);
+}
+
+.revision-diff-line:last-child {
+  border-bottom: 0;
+}
+
+.revision-diff-line.added {
+  background: color-mix(in srgb, var(--success-soft) 72%, var(--surface));
+  color: var(--success);
+}
+
+.revision-diff-line.removed {
+  background: color-mix(in srgb, var(--danger-soft) 72%, var(--surface));
+  color: var(--danger);
+}
+
+.revision-diff-line code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: inherit;
+}
+
+.revision-diff-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+@media (max-width: 760px) {
+  .conflict-statements {
+    grid-template-columns: 1fr;
+  }
+
+  .wiki-conflict-list article > footer,
+  .revision-diff-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .wiki-conflict-list article > footer button,
+  .revision-diff-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Wiki intelligence */
+.wiki-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.wiki-quality-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.wiki-quality-filters button {
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.wiki-quality-filters button.active {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.wiki-page-item-heading {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quality-pill {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.quality-pill.good {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.quality-pill.attention {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.maintenance-panel,
+.wiki-quality-panel,
+.claim-support-section {
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.maintenance-suggestion-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.maintenance-suggestion-list article {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface-muted);
+}
+
+.maintenance-suggestion-list header,
+.maintenance-suggestion-list footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.maintenance-suggestion-list h3,
+.maintenance-suggestion-list p {
+  margin: 0;
+}
+
+.maintenance-suggestion-list p {
+  color: var(--muted-strong);
+  line-height: 1.5;
+  font-size: 0.84rem;
+}
+
+.maintenance-suggestion-list small {
+  color: var(--muted);
+}
+
+.maintenance-suggestion-list footer {
+  justify-content: flex-end;
+  margin-top: auto;
+}
+
+.maintenance-type {
+  color: var(--accent-text);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.maintenance-status {
+  padding: 5px 8px;
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 800;
+}
+
+.maintenance-status.pending {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.maintenance-status.approved {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.maintenance-status.rejected {
+  background: var(--surface-hover);
+  color: var(--muted);
+}
+
+.wiki-quality-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+  background: var(--surface-muted);
+}
+
+.quality-overall {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.quality-overall div {
+  display: grid;
+  gap: 2px;
+}
+
+.quality-overall strong {
+  color: var(--text-strong);
+  font-size: 1.3rem;
+}
+
+.quality-overall span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.quality-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.quality-metric-grid > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+}
+
+.quality-metric-grid span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.quality-metric-grid strong {
+  color: var(--text-strong);
+}
+
+.quality-issue-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.quality-issue-list span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 9px;
+  border-radius: 999px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.inline-citation {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 0.72em;
+  font-weight: 800;
+  vertical-align: baseline;
+}
+
+.inline-citation:hover {
+  background: color-mix(in srgb, var(--accent-soft) 70%, var(--surface));
+}
+
+.claim-support-section {
+  margin: 16px 0;
+  background: var(--surface-muted);
+}
+
+.claim-support-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.claim-support-list article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.claim-support-list article > span {
+  color: var(--accent-text);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.claim-support-list p {
+  margin: 0 0 8px;
+  color: var(--text-strong);
+  line-height: 1.5;
+}
+
+.claim-support-list article > div > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.claim-support-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-muted);
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+}
+
+.claim-support-list button:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  color: var(--accent-text);
+}
+
+@media (max-width: 900px) {
+  .quality-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .quality-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .maintenance-suggestion-list {
+    grid-template-columns: 1fr;
+  }
+
+  .maintenance-suggestion-list footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .maintenance-suggestion-list footer button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+.maintenance-preview {
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.maintenance-preview summary {
+  color: var(--accent-text);
+  font-size: 0.75rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.maintenance-preview pre {
+  max-height: 180px;
+  overflow: auto;
+  margin: 9px 0 0;
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+}
+
+.processing-progress,
+.processing-failure {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 0.9rem;
+  background: var(--surface-muted);
+}
+
+.processing-progress-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.88rem;
+}
+
+.processing-progress-header strong {
+  color: var(--text);
+}
+
+.processing-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.processing-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 220ms ease;
+}
+
+.processing-progress small {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--muted);
+}
+
+.processing-failure {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+}
+
+.processing-failure strong {
+  color: var(--danger);
+}
+
+.processing-failure p {
+  margin: 0.4rem 0 0.75rem;
+  color: var(--muted-strong);
+  font-size: 0.86rem;
+  line-height: 1.45;
 }

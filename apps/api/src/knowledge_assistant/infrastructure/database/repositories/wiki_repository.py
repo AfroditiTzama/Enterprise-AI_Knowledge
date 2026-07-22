@@ -1,4 +1,6 @@
-from uuid import UUID
+import json
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     delete,
@@ -11,8 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from knowledge_assistant.domain.wiki.entities import (
+    WikiClaimReference,
+    WikiConflictStatus,
     WikiDocumentGraph,
+    WikiMaintenanceStatus,
+    WikiMaintenanceSuggestion,
+    WikiMaintenanceSuggestionDraft,
     WikiPage,
+    WikiPageConflict,
     WikiPageDetails,
     WikiPageReference,
     WikiPageRevision,
@@ -30,6 +38,9 @@ from knowledge_assistant.infrastructure.database.models.document_chunk import (
     DocumentChunkModel,
 )
 from knowledge_assistant.infrastructure.database.models.wiki import (
+    WikiClaimCitationModel,
+    WikiMaintenanceSuggestionModel,
+    WikiPageConflictModel,
     WikiPageLinkModel,
     WikiPageModel,
     WikiPageRevisionModel,
@@ -234,10 +245,16 @@ class SQLAlchemyWikiRepository(WikiRepository):
             for revision in revisions
         ]
 
+        claim_citation_models = [
+            WikiMapper.claim_citation_to_model(citation)
+            for citation in graph.claim_citations
+        ]
+
         self._session.add_all(page_models)
         self._session.add_all(source_models)
         self._session.add_all(link_models)
         self._session.add_all(revision_models)
+        self._session.add_all(claim_citation_models)
 
         await self._session.flush()
 
@@ -246,6 +263,11 @@ class SQLAlchemyWikiRepository(WikiRepository):
         graph: WikiDocumentGraph,
     ) -> None:
         self._validate_graph(graph)
+
+        revision_hints = {
+            hint.page_id: hint.operation
+            for hint in graph.revision_hints
+        }
 
         incoming_page_ids = {
             page.id
@@ -489,7 +511,10 @@ class SQLAlchemyWikiRepository(WikiRepository):
                     content_markdown=(
                         page.content_markdown
                     ),
-                    operation=WikiRevisionOperation.UPDATE,
+                    operation=revision_hints.get(
+                        page.id,
+                        WikiRevisionOperation.UPDATE,
+                    ),
                     triggering_document_id=(
                         graph.document_id
                     ),
@@ -625,9 +650,44 @@ class SQLAlchemyWikiRepository(WikiRepository):
             not in existing_link_keys
         ]
 
+        if document_chunk_ids and incoming_page_ids:
+            await self._session.execute(
+                delete(WikiClaimCitationModel).where(
+                    WikiClaimCitationModel.wiki_page_id.in_(
+                        incoming_page_ids
+                    ),
+                    WikiClaimCitationModel.chunk_id.in_(
+                        document_chunk_ids
+                    ),
+                )
+            )
+
+        claim_citation_models = [
+            WikiMapper.claim_citation_to_model(citation)
+            for citation in graph.claim_citations
+        ]
+
+        if incoming_page_ids:
+            await self._session.execute(
+                delete(WikiPageConflictModel).where(
+                    WikiPageConflictModel.wiki_page_id.in_(
+                        incoming_page_ids
+                    ),
+                    WikiPageConflictModel.source_document_id
+                    == graph.document_id,
+                )
+            )
+
+        conflict_models = [
+            WikiMapper.conflict_to_model(conflict)
+            for conflict in graph.conflicts
+        ]
+
         self._session.add_all(revision_models)
         self._session.add_all(source_models)
         self._session.add_all(link_models)
+        self._session.add_all(conflict_models)
+        self._session.add_all(claim_citation_models)
 
         await self._session.flush()
 
@@ -722,11 +782,23 @@ class SQLAlchemyWikiRepository(WikiRepository):
             page_id=page.id,
         )
 
+        conflicts = await self._list_page_conflicts(
+            owner_id=owner_id,
+            page_id=page.id,
+        )
+
+        claim_citations = await self._list_claim_citations(
+            owner_id=owner_id,
+            page_id=page.id,
+        )
+
         return WikiPageDetails(
             page=page,
             sources=sources,
             related_pages=related_pages,
             backlinks=backlinks,
+            conflicts=conflicts,
+            claim_citations=claim_citations,
         )
 
     async def list_revisions_by_slug(
@@ -916,6 +988,325 @@ class SQLAlchemyWikiRepository(WikiRepository):
             for row in result.all()
         )
 
+    async def _list_page_conflicts(
+        self,
+        *,
+        owner_id: UUID,
+        page_id: UUID,
+    ) -> tuple[WikiPageConflict, ...]:
+        result = await self._session.execute(
+            select(WikiPageConflictModel)
+            .where(
+                WikiPageConflictModel.owner_id == owner_id,
+                WikiPageConflictModel.wiki_page_id == page_id,
+            )
+            .order_by(
+                WikiPageConflictModel.created_at.desc(),
+            )
+        )
+
+        return tuple(
+            WikiMapper.conflict_to_domain(model)
+            for model in result.scalars().all()
+        )
+
+    async def _list_claim_citations(
+        self,
+        *,
+        owner_id: UUID,
+        page_id: UUID,
+    ) -> tuple[WikiClaimReference, ...]:
+        result = await self._session.execute(
+            select(
+                WikiClaimCitationModel.claim_key.label("claim_key"),
+                WikiClaimCitationModel.claim_text.label("claim_text"),
+                WikiClaimCitationModel.position.label("position"),
+                WikiClaimCitationModel.chunk_id.label("chunk_id"),
+                DocumentChunkModel.document_id.label("document_id"),
+                DocumentModel.original_filename.label("document_filename"),
+                DocumentChunkModel.chunk_index.label("chunk_index"),
+                DocumentChunkModel.page_number.label("page_number"),
+            )
+            .join(
+                DocumentChunkModel,
+                DocumentChunkModel.id == WikiClaimCitationModel.chunk_id,
+            )
+            .join(
+                DocumentModel,
+                DocumentModel.id == DocumentChunkModel.document_id,
+            )
+            .where(
+                WikiClaimCitationModel.owner_id == owner_id,
+                WikiClaimCitationModel.wiki_page_id == page_id,
+                DocumentModel.owner_id == owner_id,
+            )
+            .order_by(
+                WikiClaimCitationModel.position.asc(),
+                DocumentChunkModel.chunk_index.asc(),
+            )
+        )
+
+        grouped: dict[
+            tuple[str, str, int],
+            list[WikiPageSourceReference],
+        ] = {}
+
+        for row in result.all():
+            key = (row.claim_key, row.claim_text, row.position)
+            grouped.setdefault(key, []).append(
+                WikiPageSourceReference(
+                    chunk_id=row.chunk_id,
+                    document_id=row.document_id,
+                    document_filename=row.document_filename,
+                    chunk_index=row.chunk_index,
+                    page_number=row.page_number,
+                )
+            )
+
+        return tuple(
+            WikiClaimReference(
+                claim_key=claim_key,
+                claim_text=claim_text,
+                position=position,
+                sources=tuple(sources),
+            )
+            for (claim_key, claim_text, position), sources
+            in grouped.items()
+        )
+
+    async def restore_revision(
+        self,
+        *,
+        owner_id: UUID,
+        slug: str,
+        revision_number: int,
+    ) -> WikiPage:
+        cleaned_slug = slug.strip().lower()
+
+        page_result = await self._session.execute(
+            select(WikiPageModel).where(
+                WikiPageModel.owner_id == owner_id,
+                WikiPageModel.slug == cleaned_slug,
+            )
+        )
+        page_model = page_result.scalar_one_or_none()
+
+        if page_model is None:
+            raise ValueError("Wiki page was not found.")
+
+        revision_result = await self._session.execute(
+            select(WikiPageRevisionModel).where(
+                WikiPageRevisionModel.owner_id == owner_id,
+                WikiPageRevisionModel.page_slug == cleaned_slug,
+                WikiPageRevisionModel.revision_number
+                == revision_number,
+            )
+        )
+        revision_model = revision_result.scalar_one_or_none()
+
+        if revision_model is None:
+            raise ValueError("Wiki revision was not found.")
+
+        latest_result = await self._session.execute(
+            select(
+                func.max(WikiPageRevisionModel.revision_number)
+            ).where(
+                WikiPageRevisionModel.owner_id == owner_id,
+                WikiPageRevisionModel.page_slug == cleaned_slug,
+            )
+        )
+        latest_number = int(latest_result.scalar_one() or 0)
+        now = datetime.now(timezone.utc)
+
+        page_model.title = revision_model.title
+        page_model.summary = revision_model.summary
+        page_model.content_markdown = (
+            revision_model.content_markdown
+        )
+        page_model.updated_at = now
+
+        restored_revision = WikiPageRevision.create(
+            wiki_page_id=page_model.id,
+            owner_id=owner_id,
+            page_slug=cleaned_slug,
+            revision_number=latest_number + 1,
+            title=revision_model.title,
+            summary=revision_model.summary,
+            content_markdown=revision_model.content_markdown,
+            operation=WikiRevisionOperation.RESTORE,
+            triggering_document_id=None,
+        )
+        self._session.add(
+            WikiMapper.revision_to_model(restored_revision)
+        )
+        await self._session.flush()
+
+        return WikiMapper.page_to_domain(page_model)
+
+    async def update_conflict_status(
+        self,
+        *,
+        owner_id: UUID,
+        conflict_id: UUID,
+        status: WikiConflictStatus,
+        resolution_note: str,
+    ) -> WikiPageConflict:
+        result = await self._session.execute(
+            select(WikiPageConflictModel).where(
+                WikiPageConflictModel.id == conflict_id,
+                WikiPageConflictModel.owner_id == owner_id,
+            )
+        )
+        model = result.scalar_one_or_none()
+
+        if model is None:
+            raise ValueError("Wiki conflict was not found.")
+
+        if status == WikiConflictStatus.OPEN:
+            model.resolved_at = None
+        else:
+            model.resolved_at = datetime.now(timezone.utc)
+
+        model.status = status.value
+        model.resolution_note = resolution_note.strip()
+        await self._session.flush()
+
+        return WikiMapper.conflict_to_domain(model)
+
+    async def sync_maintenance_suggestions(
+        self,
+        *,
+        owner_id: UUID,
+        suggestions: list[WikiMaintenanceSuggestionDraft],
+    ) -> list[WikiMaintenanceSuggestion]:
+        fingerprints = {
+            suggestion.fingerprint
+            for suggestion in suggestions
+        }
+
+        result = await self._session.execute(
+            select(WikiMaintenanceSuggestionModel).where(
+                WikiMaintenanceSuggestionModel.owner_id == owner_id,
+            )
+        )
+        existing_models = list(result.scalars().all())
+        existing_by_fingerprint = {
+            model.fingerprint: model
+            for model in existing_models
+        }
+
+        if fingerprints:
+            await self._session.execute(
+                delete(WikiMaintenanceSuggestionModel).where(
+                    WikiMaintenanceSuggestionModel.owner_id == owner_id,
+                    WikiMaintenanceSuggestionModel.status
+                    == WikiMaintenanceStatus.PENDING.value,
+                    ~WikiMaintenanceSuggestionModel.fingerprint.in_(
+                        fingerprints
+                    ),
+                )
+            )
+        else:
+            await self._session.execute(
+                delete(WikiMaintenanceSuggestionModel).where(
+                    WikiMaintenanceSuggestionModel.owner_id == owner_id,
+                    WikiMaintenanceSuggestionModel.status
+                    == WikiMaintenanceStatus.PENDING.value,
+                )
+            )
+
+        now = datetime.now(timezone.utc)
+
+        for suggestion in suggestions:
+            model = existing_by_fingerprint.get(
+                suggestion.fingerprint
+            )
+            if model is None:
+                model = WikiMaintenanceSuggestionModel(
+                    id=uuid4(),
+                    owner_id=owner_id,
+                    issue_type=suggestion.issue_type.value,
+                    status=WikiMaintenanceStatus.PENDING.value,
+                    fingerprint=suggestion.fingerprint,
+                    title=suggestion.title,
+                    description=suggestion.description,
+                    page_ids_json=json.dumps(
+                        [str(page_id) for page_id in suggestion.page_ids]
+                    ),
+                    metadata_json=json.dumps(suggestion.metadata),
+                    confidence=suggestion.confidence,
+                    created_at=now,
+                    updated_at=now,
+                )
+                self._session.add(model)
+                existing_by_fingerprint[suggestion.fingerprint] = model
+                continue
+
+            model.issue_type = suggestion.issue_type.value
+            model.title = suggestion.title
+            model.description = suggestion.description
+            model.page_ids_json = json.dumps(
+                [str(page_id) for page_id in suggestion.page_ids]
+            )
+            model.metadata_json = json.dumps(suggestion.metadata)
+            model.confidence = suggestion.confidence
+            model.updated_at = now
+
+        await self._session.flush()
+        return await self.list_maintenance_suggestions(
+            owner_id=owner_id,
+        )
+
+    async def list_maintenance_suggestions(
+        self,
+        *,
+        owner_id: UUID,
+        status: WikiMaintenanceStatus | None = None,
+    ) -> list[WikiMaintenanceSuggestion]:
+        statement = select(WikiMaintenanceSuggestionModel).where(
+            WikiMaintenanceSuggestionModel.owner_id == owner_id,
+        )
+
+        if status is not None:
+            statement = statement.where(
+                WikiMaintenanceSuggestionModel.status == status.value,
+            )
+
+        statement = statement.order_by(
+            WikiMaintenanceSuggestionModel.status.asc(),
+            WikiMaintenanceSuggestionModel.confidence.desc(),
+            WikiMaintenanceSuggestionModel.updated_at.desc(),
+        )
+        result = await self._session.execute(statement)
+        return [
+            WikiMapper.maintenance_to_domain(model)
+            for model in result.scalars().all()
+        ]
+
+    async def update_maintenance_suggestion_status(
+        self,
+        *,
+        owner_id: UUID,
+        suggestion_id: UUID,
+        status: WikiMaintenanceStatus,
+    ) -> WikiMaintenanceSuggestion:
+        result = await self._session.execute(
+            select(WikiMaintenanceSuggestionModel).where(
+                WikiMaintenanceSuggestionModel.id == suggestion_id,
+                WikiMaintenanceSuggestionModel.owner_id == owner_id,
+            )
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            raise ValueError(
+                "Wiki maintenance suggestion was not found."
+            )
+
+        model.status = status.value
+        model.updated_at = datetime.now(timezone.utc)
+        await self._session.flush()
+        return WikiMapper.maintenance_to_domain(model)
+
     @staticmethod
     def _validate_graph(
         graph: WikiDocumentGraph,
@@ -954,4 +1345,33 @@ class SQLAlchemyWikiRepository(WikiRepository):
             if link.target_page_id not in page_ids:
                 raise ValueError(
                     "Wiki link has an unknown target page."
+                )
+
+
+        for conflict in graph.conflicts:
+            if conflict.owner_id != graph.owner_id:
+                raise ValueError(
+                    "Wiki conflict owner does not match graph owner."
+                )
+
+            if conflict.wiki_page_id not in page_ids:
+                raise ValueError(
+                    "Wiki conflict references an unknown Wiki page."
+                )
+
+        for citation in graph.claim_citations:
+            if citation.owner_id != graph.owner_id:
+                raise ValueError(
+                    "Wiki claim citation owner does not match graph owner."
+                )
+
+            if citation.wiki_page_id not in page_ids:
+                raise ValueError(
+                    "Wiki claim citation references an unknown page."
+                )
+
+        for hint in graph.revision_hints:
+            if hint.page_id not in page_ids:
+                raise ValueError(
+                    "Wiki revision hint references an unknown page."
                 )

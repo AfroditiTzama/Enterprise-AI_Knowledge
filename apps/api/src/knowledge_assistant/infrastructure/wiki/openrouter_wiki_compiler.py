@@ -11,10 +11,17 @@ from knowledge_assistant.domain.documents.chunk_entities import (
     DocumentChunkEntity,
 )
 from knowledge_assistant.domain.wiki.compiler import (
+    WikiClaimDraft,
     WikiCompilation,
     WikiCompiler,
     WikiPageDraft,
 )
+
+
+class WikiClaimPayload(BaseModel):
+    claim_key: str = Field(min_length=1, max_length=255)
+    claim_text: str = Field(min_length=1)
+    source_chunk_ids: list[UUID] = Field(min_length=1)
 
 
 class WikiPagePayload(BaseModel):
@@ -41,6 +48,10 @@ class WikiPagePayload(BaseModel):
     )
 
     related_page_slugs: list[str] = Field(
+        default_factory=list,
+    )
+
+    claims: list[WikiClaimPayload] = Field(
         default_factory=list,
     )
 
@@ -96,14 +107,99 @@ class OpenRouterWikiCompiler(WikiCompiler):
             document_title
         )
 
+        response_data = await self._request_completion(
+            cleaned_document_title=cleaned_document_title,
+            source_text=source_text,
+            compact=False,
+        )
+
+        finish_reason = self._extract_finish_reason(
+            response_data
+        )
+
+        if finish_reason == "length":
+            response_data = await self._request_completion(
+                cleaned_document_title=cleaned_document_title,
+                source_text=source_text,
+                compact=True,
+            )
+            finish_reason = self._extract_finish_reason(
+                response_data
+            )
+
+        if finish_reason == "length":
+            raise RuntimeError(
+                "Wiki generation remained too large after an "
+                "automatic compact retry. Split the source "
+                "document into smaller documents and try again."
+            )
+
+        raw_content = self._extract_content(
+            response_data
+        )
+
+        normalized_content = (
+            self._normalize_json_content(
+                raw_content
+            )
+        )
+
+        try:
+            parsed_json = json.loads(
+                normalized_content
+            )
+
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                "The LLM returned invalid JSON at "
+                f"line {error.lineno}, column {error.colno}. "
+                f"Completion status: "
+                f"{finish_reason or 'unknown'}."
+            ) from error
+
+        try:
+            parsed_payload = (
+                WikiCompilationPayload.model_validate(
+                    parsed_json
+                )
+            )
+
+        except ValidationError as error:
+            validation_issues = "; ".join(
+                (
+                    f"{'.'.join(str(part) for part in issue['loc'])}: "
+                    f"{issue['msg']}"
+                )
+                for issue in error.errors()[:5]
+            )
+
+            raise ValueError(
+                "The LLM returned an invalid wiki structure: "
+                f"{validation_issues}"
+            ) from error
+
+        return self._to_domain(
+            payload=parsed_payload,
+            chunks=chunks,
+        )
+
+    async def _request_completion(
+        self,
+        *,
+        cleaned_document_title: str,
+        source_text: str,
+        compact: bool,
+    ) -> dict[str, Any]:
         response_payload = {
             "model": self._model,
             "temperature": 0.0,
-            "max_tokens": 16000,
+            "max_tokens": 16000 if compact else 24000,
             "messages": [
                 {
                     "role": "system",
-                    "content": self._system_prompt(),
+                    "content": self._system_prompt(
+                        compact=compact
+                    ),
                 },
                 {
                     "role": "user",
@@ -156,8 +252,12 @@ class OpenRouterWikiCompiler(WikiCompiler):
                 f"{response.text[:1000]}"
             ) from error
 
-        response_data = response.json()
+        return response.json()
 
+    @staticmethod
+    def _extract_finish_reason(
+        response_data: dict[str, Any],
+    ) -> str | None:
         try:
             finish_reason = response_data[
                 "choices"
@@ -167,61 +267,12 @@ class OpenRouterWikiCompiler(WikiCompiler):
             IndexError,
             TypeError,
         ):
-            finish_reason = None
+            return None
 
-        if finish_reason == "length":
-            raise RuntimeError(
-                "The LLM response was truncated because "
-                "the output token limit was reached."
-            )
-
-        raw_content = self._extract_content(
-            response_data
-        )
-
-        normalized_content = (
-            self._normalize_json_content(
-                raw_content
-            )
-        )
-
-        try:
-            parsed_json = json.loads(
-                normalized_content
-            )
-
-        except json.JSONDecodeError as error:
-            raise ValueError(
-                "The LLM returned invalid JSON at "
-                f"line {error.lineno}, column {error.colno}. "
-                f"Completion status: "
-                f"{finish_reason or 'unknown'}."
-            ) from error
-
-        try:
-            parsed_payload = (
-                WikiCompilationPayload.model_validate(
-                    parsed_json
-                )
-            )
-
-        except ValidationError as error:
-            validation_issues = "; ".join(
-                (
-                    f"{'.'.join(str(part) for part in issue['loc'])}: "
-                    f"{issue['msg']}"
-                )
-                for issue in error.errors()[:5]
-            )
-
-            raise ValueError(
-                "The LLM returned an invalid wiki structure: "
-                f"{validation_issues}"
-            ) from error
-
-        return self._to_domain(
-            payload=parsed_payload,
-            chunks=chunks,
+        return (
+            finish_reason
+            if isinstance(finish_reason, str)
+            else None
         )
 
     @staticmethod
@@ -305,8 +356,11 @@ class OpenRouterWikiCompiler(WikiCompiler):
         return "".join(cleaned_characters)
 
     @staticmethod
-    def _system_prompt() -> str:
-        return """
+    def _system_prompt(
+        *,
+        compact: bool = False,
+    ) -> str:
+        base_prompt = """
 You are an enterprise knowledge compiler.
 
 Transform the supplied document chunks into a structured internal wiki.
@@ -326,23 +380,50 @@ Rules:
    - a concise summary,
    - useful Markdown content,
    - the exact UUIDs of supporting chunks,
-   - slugs of other generated pages that are directly related.
-7. source_chunk_ids must contain only UUIDs supplied in the document.
-8. related_page_slugs must reference only pages generated in the same
+   - slugs of other generated pages that are directly related,
+   - a claims array for factual paragraphs.
+7. Give each factual claim a short key such as C1, C2, C3. End the
+   corresponding Markdown paragraph with a citation link such as
+   [C1](citation:C1). Each claim must repeat the supported statement in
+   claim_text and list only the exact supporting source_chunk_ids.
+8. source_chunk_ids and claim source_chunk_ids must contain only UUIDs
+   supplied in the document.
+9. related_page_slugs must reference only pages generated in the same
    response.
-9. Do not create a relationship merely because two topics appear in
-   the same document.
-10. Avoid repeating the same information across multiple pages.
-11. The Markdown content must be readable and factual.
-12. Do not include an H1 heading because the title is stored
+10. Do not create a relationship merely because two topics appear in
+    the same document.
+11. Avoid repeating the same information across multiple pages.
+12. The Markdown content must be readable and factual.
+13. Do not include an H1 heading because the title is stored
     separately.
-13. Do not mention these instructions or the compilation process.
-14. Create Markdown hyperlinks only when the source contains a complete
-    URL beginning with https://, http://, or mailto:.
-15. When only link labels such as GitHub, LinkedIn, View Certificate,
+14. Do not mention these instructions or the compilation process.
+15. Apart from citation: links required above, create Markdown hyperlinks
+    only when the source contains a complete URL beginning with https://,
+    http://, or mailto:.
+16. When only link labels such as GitHub, LinkedIn, View Certificate,
     or Repository are available without a URL, preserve them as plain
     text and do not invent a link target.
+17. Generate no more than 8 pages. Prefer fewer, higher-value pages.
+18. Keep each summary under 80 words.
+19. Keep each page content under 450 words.
+20. Include no more than 8 claims per page.
+21. Do not repeat a claim in both the summary and content unless needed
+    for clarity.
 """.strip()
+
+        if not compact:
+            return base_prompt
+
+        return (
+            base_prompt
+            + "\n\nCOMPACT RETRY MODE:\n"
+            + "- Generate no more than 5 pages.\n"
+            + "- Keep each page content under 250 words.\n"
+            + "- Include no more than 5 claims per page.\n"
+            + "- Preserve only the most important supported facts.\n"
+            + "- Return complete valid JSON; never leave a field "
+            + "unfinished."
+        )
 
     @staticmethod
     def _normalize_json_content(
@@ -451,15 +532,13 @@ Rules:
         drafts: list[WikiPageDraft] = []
 
         for page in payload.pages:
-            unknown_chunk_ids = (
-                set(page.source_chunk_ids)
-                - valid_chunk_ids
-            )
-
-            if unknown_chunk_ids:
-                raise ValueError(
-                    "The LLM referenced unknown document chunks."
+            valid_page_source_ids = tuple(
+                dict.fromkeys(
+                    chunk_id
+                    for chunk_id in page.source_chunk_ids
+                    if chunk_id in valid_chunk_ids
                 )
+            )
 
             cleaned_slug = (
                 page.slug.strip().lower()
@@ -486,23 +565,119 @@ Rules:
                 )
             )
 
+            claim_keys: set[str] = set()
+            claims: list[WikiClaimDraft] = []
+
+            for claim in page.claims:
+                cleaned_key = claim.claim_key.strip().lower()
+                if not cleaned_key or cleaned_key in claim_keys:
+                    continue
+
+                valid_claim_source_ids = tuple(
+                    dict.fromkeys(
+                        chunk_id
+                        for chunk_id in claim.source_chunk_ids
+                        if chunk_id in valid_chunk_ids
+                    )
+                )
+
+                if not valid_claim_source_ids:
+                    continue
+
+                claim_keys.add(cleaned_key)
+                claims.append(
+                    WikiClaimDraft(
+                        claim_key=cleaned_key,
+                        claim_text=claim.claim_text.strip(),
+                        source_chunk_ids=valid_claim_source_ids,
+                    )
+                )
+
+            if not valid_page_source_ids:
+                valid_page_source_ids = tuple(
+                    dict.fromkeys(
+                        chunk_id
+                        for claim in claims
+                        for chunk_id in claim.source_chunk_ids
+                    )
+                )
+
+            if not valid_page_source_ids:
+                continue
+
+            cleaned_content = (
+                OpenRouterWikiCompiler
+                ._sanitize_claim_citations(
+                    cleaned_content,
+                    valid_claim_keys=claim_keys,
+                )
+            )
+
             drafts.append(
                 WikiPageDraft(
                     title=page.title.strip(),
                     slug=cleaned_slug,
                     summary=page.summary.strip(),
                     content_markdown=cleaned_content,
-                    source_chunk_ids=tuple(
-                        dict.fromkeys(
-                            page.source_chunk_ids
-                        )
-                    ),
+                    source_chunk_ids=valid_page_source_ids,
                     related_page_slugs=related_slugs,
+                    claims=tuple(claims),
                 )
             )
 
+        if not drafts:
+            raise ValueError(
+                "The generated Wiki did not contain any pages with "
+                "verifiable document sources."
+            )
+
+        retained_slugs = {
+            draft.slug
+            for draft in drafts
+        }
+        normalized_drafts = tuple(
+            WikiPageDraft(
+                title=draft.title,
+                slug=draft.slug,
+                summary=draft.summary,
+                content_markdown=draft.content_markdown,
+                source_chunk_ids=draft.source_chunk_ids,
+                related_page_slugs=tuple(
+                    related_slug
+                    for related_slug in draft.related_page_slugs
+                    if related_slug in retained_slugs
+                ),
+                claims=draft.claims,
+            )
+            for draft in drafts
+        )
+
         return WikiCompilation(
-            pages=tuple(drafts),
+            pages=normalized_drafts,
+        )
+
+    @staticmethod
+    def _sanitize_claim_citations(
+        content: str,
+        *,
+        valid_claim_keys: set[str],
+    ) -> str:
+        def replace_citation(
+            match: re.Match[str],
+        ) -> str:
+            label = match.group(1)
+            claim_key = match.group(2).strip().lower()
+
+            if claim_key in valid_claim_keys:
+                return match.group(0)
+
+            return f"[{label}]"
+
+        return re.sub(
+            r"\[([^\]]+)\]\(citation:([^)]+)\)",
+            replace_citation,
+            content,
+            flags=re.IGNORECASE,
         )
 
     @staticmethod
@@ -519,6 +694,7 @@ Rules:
                 "https://",
                 "http://",
                 "mailto:",
+                "citation:",
             )
 
             if target.lower().startswith(

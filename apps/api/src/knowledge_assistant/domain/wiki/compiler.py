@@ -8,6 +8,13 @@ from knowledge_assistant.domain.documents.chunk_entities import (
 
 
 @dataclass(frozen=True)
+class WikiClaimDraft:
+    claim_key: str
+    claim_text: str
+    source_chunk_ids: tuple[UUID, ...]
+
+
+@dataclass(frozen=True)
 class WikiPageDraft:
     title: str
     slug: str
@@ -15,6 +22,7 @@ class WikiPageDraft:
     content_markdown: str
     source_chunk_ids: tuple[UUID, ...]
     related_page_slugs: tuple[str, ...]
+    claims: tuple[WikiClaimDraft, ...] = ()
 
 
 @dataclass(frozen=True)

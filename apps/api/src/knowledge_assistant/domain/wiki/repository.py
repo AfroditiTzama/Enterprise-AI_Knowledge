@@ -2,8 +2,13 @@ from abc import ABC, abstractmethod
 from uuid import UUID
 
 from knowledge_assistant.domain.wiki.entities import (
+    WikiConflictStatus,
     WikiDocumentGraph,
     WikiPage,
+    WikiPageConflict,
+    WikiMaintenanceStatus,
+    WikiMaintenanceSuggestion,
+    WikiMaintenanceSuggestionDraft,
     WikiPageDetails,
     WikiPageRevision,
 )
@@ -72,4 +77,58 @@ class WikiRepository(ABC):
         slug: str,
     ) -> list[WikiPageRevision]:
         """Return the revision history of one Wiki page."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def restore_revision(
+        self,
+        *,
+        owner_id: UUID,
+        slug: str,
+        revision_number: int,
+    ) -> WikiPage:
+        """Restore a historical revision as a new current revision."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_conflict_status(
+        self,
+        *,
+        owner_id: UUID,
+        conflict_id: UUID,
+        status: WikiConflictStatus,
+        resolution_note: str,
+    ) -> WikiPageConflict:
+        """Resolve or dismiss one owner-scoped Wiki conflict."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def sync_maintenance_suggestions(
+        self,
+        *,
+        owner_id: UUID,
+        suggestions: list[WikiMaintenanceSuggestionDraft],
+    ) -> list[WikiMaintenanceSuggestion]:
+        """Synchronize the active maintenance suggestions for one owner."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def list_maintenance_suggestions(
+        self,
+        *,
+        owner_id: UUID,
+        status: WikiMaintenanceStatus | None = None,
+    ) -> list[WikiMaintenanceSuggestion]:
+        """Return owner-scoped Wiki maintenance suggestions."""
+        raise NotImplementedError
+
+    @abstractmethod
+    async def update_maintenance_suggestion_status(
+        self,
+        *,
+        owner_id: UUID,
+        suggestion_id: UUID,
+        status: WikiMaintenanceStatus,
+    ) -> WikiMaintenanceSuggestion:
+        """Approve or reject one maintenance suggestion."""
         raise NotImplementedError
