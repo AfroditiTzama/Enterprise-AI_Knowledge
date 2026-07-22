@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -19,10 +20,17 @@ from knowledge_assistant.domain.documents.text_extractor import (
     ExtractedDocument,
 )
 from knowledge_assistant.domain.embeddings.service import EmbeddingService
+from knowledge_assistant.domain.jobs.entities import ProcessingJobStage
 from knowledge_assistant.domain.vector_store.store import (
     VectorRecord,
     VectorStore,
 )
+
+
+ProgressCallback = Callable[
+    [ProcessingJobStage, int],
+    Awaitable[None],
+]
 
 
 @dataclass(frozen=True)
@@ -56,10 +64,9 @@ class ProcessDocumentCommand:
         *,
         document_id: UUID,
         owner_id: UUID,
+        progress_callback: ProgressCallback | None = None,
     ) -> ProcessDocumentResult:
-        document = await self._document_repository.get_by_id(
-            document_id
-        )
+        document = await self._document_repository.get_by_id(document_id)
 
         if document is None or document.owner_id != owner_id:
             raise ValueError("Document was not found.")
@@ -68,6 +75,11 @@ class ProcessDocumentCommand:
         document = await self._document_repository.update(document)
 
         try:
+            await self._report(
+                progress_callback,
+                ProcessingJobStage.EXTRACTING,
+                10,
+            )
             file_content = await self._file_storage.read(
                 document.storage_path
             )
@@ -78,6 +90,11 @@ class ProcessDocumentCommand:
                 content_type=document.content_type,
             )
 
+            await self._report(
+                progress_callback,
+                ProcessingJobStage.CHUNKING,
+                40,
+            )
             chunks = self._text_chunker.chunk(extracted_document)
 
             if not chunks:
@@ -95,6 +112,11 @@ class ProcessDocumentCommand:
                 for chunk in chunks
             )
 
+            await self._report(
+                progress_callback,
+                ProcessingJobStage.EMBEDDING,
+                60,
+            )
             embeddings = await self._embedding_service.embed_documents(
                 [chunk.text for chunk in chunk_entities]
             )
@@ -104,6 +126,11 @@ class ProcessDocumentCommand:
                     "Embedding count does not match chunk count."
                 )
 
+            await self._report(
+                progress_callback,
+                ProcessingJobStage.PERSISTING,
+                85,
+            )
             await self._document_chunk_repository.replace_for_document(
                 document_id=document.id,
                 chunks=chunk_entities,
@@ -145,3 +172,12 @@ class ProcessDocumentCommand:
             document.mark_as_failed()
             await self._document_repository.update(document)
             raise
+
+    @staticmethod
+    async def _report(
+        callback: ProgressCallback | None,
+        stage: ProcessingJobStage,
+        progress: int,
+    ) -> None:
+        if callback is not None:
+            await callback(stage, progress)

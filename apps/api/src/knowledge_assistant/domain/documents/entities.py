@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 class DocumentStatus(str, Enum):
     UPLOADED = "uploaded"
+    QUEUED = "queued"
     PROCESSING = "processing"
     PROCESSED = "processed"
     FAILED = "failed"
@@ -62,6 +63,10 @@ class Document:
             created_at=now,
             updated_at=now,
         )
+
+    def mark_as_queued(self) -> None:
+        self.status = DocumentStatus.QUEUED
+        self._touch()
 
     def mark_as_processing(self) -> None:
         self.status = DocumentStatus.PROCESSING

@@ -1,7 +1,12 @@
 import apiClient from "./client";
+import {
+  normalizeProcessingJob,
+  type ProcessingJob,
+} from "./jobs";
 
 export type DocumentStatus =
   | "UPLOADED"
+  | "QUEUED"
   | "PROCESSING"
   | "PROCESSED"
   | "FAILED";
@@ -26,20 +31,14 @@ export interface DocumentItem {
   updated_at: string;
 }
 
-interface RawProcessDocumentResponse {
-  document: RawDocumentItem;
-  extracted_segments: number;
-  extracted_characters: number;
-  chunks_count: number;
-  text_preview: string;
+interface RawEnqueueProcessingResponse {
+  job: Parameters<typeof normalizeProcessingJob>[0];
+  created: boolean;
 }
 
-export interface ProcessDocumentResponse {
-  document: DocumentItem;
-  extracted_segments: number;
-  extracted_characters: number;
-  chunks_count: number;
-  text_preview: string;
+export interface EnqueueProcessingResponse {
+  job: ProcessingJob;
+  created: boolean;
 }
 
 function normalizeStatus(
@@ -50,6 +49,7 @@ function normalizeStatus(
 
   const validStatuses: DocumentStatus[] = [
     "UPLOADED",
+    "QUEUED",
     "PROCESSING",
     "PROCESSED",
     "FAILED",
@@ -108,17 +108,15 @@ export async function uploadDocument(
 
 export async function processDocument(
   documentId: string,
-): Promise<ProcessDocumentResponse> {
+): Promise<EnqueueProcessingResponse> {
   const response =
-    await apiClient.post<RawProcessDocumentResponse>(
+    await apiClient.post<RawEnqueueProcessingResponse>(
       `/documents/${documentId}/process`,
     );
 
   return {
-    ...response.data,
-    document: normalizeDocument(
-      response.data.document,
-    ),
+    created: response.data.created,
+    job: normalizeProcessingJob(response.data.job),
   };
 }
 

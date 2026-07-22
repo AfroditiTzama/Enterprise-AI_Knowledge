@@ -8,15 +8,22 @@ from knowledge_assistant.bootstrap.dependencies.document import (
     DeleteDocumentCommandDependency,
     GetDocumentChunkPreviewQueryDependency,
     ListDocumentsQueryDependency,
-    ProcessDocumentCommandDependency,
     UploadDocumentCommandDependency,
+)
+from knowledge_assistant.bootstrap.dependencies.jobs import (
+    EnqueueDocumentProcessingCommandDependency,
+    ProcessingJobRepositoryDependency,
 )
 from knowledge_assistant.bootstrap.dependencies.user import get_current_user
 from knowledge_assistant.domain.users.entities import User
 from knowledge_assistant.presentation.api.v1.schemas.document import (
     DocumentChunkPreviewResponse,
     DocumentResponse,
-    ProcessDocumentResponse,
+)
+
+from knowledge_assistant.presentation.api.v1.schemas.job import (
+    EnqueueProcessingJobResponse,
+    ProcessingJobResponse,
 )
 
 
@@ -94,7 +101,20 @@ async def delete_document(
     document_id: UUID,
     current_user: CurrentUserDependency,
     command: DeleteDocumentCommandDependency,
+    job_repository: ProcessingJobRepositoryDependency,
 ) -> None:
+    active_job = await job_repository.get_active_for_document(
+        owner_id=current_user.id,
+        document_id=document_id,
+    )
+    if active_job is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Wait for document processing to finish before deleting it."
+            ),
+        )
+
     try:
         await command.execute(
             document_id=document_id,
@@ -179,48 +199,26 @@ async def get_document_chunk_preview_by_location(
 
 @router.post(
     "/{document_id}/process",
-    response_model=ProcessDocumentResponse,
-    status_code=status.HTTP_200_OK,
+    response_model=EnqueueProcessingJobResponse,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 async def process_document(
     document_id: UUID,
     current_user: CurrentUserDependency,
-    command: ProcessDocumentCommandDependency,
-) -> ProcessDocumentResponse:
+    command: EnqueueDocumentProcessingCommandDependency,
+) -> EnqueueProcessingJobResponse:
     try:
         result = await command.execute(
             document_id=document_id,
             owner_id=current_user.id,
         )
-
-        full_text = result.extracted_document.full_text
-
-        return ProcessDocumentResponse(
-            document=DocumentResponse.model_validate(
-                result.document
-            ),
-            extracted_segments=len(
-                result.extracted_document.segments
-            ),
-            extracted_characters=len(full_text),
-            chunks_count=len(result.chunks),
-            text_preview=full_text[:1000],
-        )
-
     except ValueError as exc:
-        if str(exc) == "Document was not found.":
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(exc),
-            ) from exc
-
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
 
-    except FileNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="The stored document file could not be found.",
-        ) from exc
+    return EnqueueProcessingJobResponse(
+        job=ProcessingJobResponse.model_validate(result.job),
+        created=result.created,
+    )
