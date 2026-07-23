@@ -1,0 +1,2 @@
+{"question":"What is the main purpose of the uploaded document?","expected_titles":["example.pdf"],"reference_answer":"A short grounded reference answer.","k":7}
+{"question":"Which evidence supports the main conclusion?","expected_titles":["example.pdf"],"reference_answer":"A grounded answer supported by the selected source.","k":7}
